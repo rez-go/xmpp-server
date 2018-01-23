@@ -26,24 +26,23 @@ type StreamFeatures struct {
 
 // RFC 6120  4.9.2
 type StreamError struct {
-	XMLName   xml.Name `xml:"http://etherx.jabber.org/streams error"`
-	Condition interface{}
-	Text      string `xml:"text"`
+	XMLName         xml.Name `xml:"http://etherx.jabber.org/streams error"`
+	Condition       StreamErrorCondition
+	Text            string      `xml:"text"`
+	CustomCondition interface{} `xml:",omitempty"`
 }
 
 // RFC 6120  4.9.3  Defined Stream Error Conditions
 
-// RFC 6120  4.9.3.1
-type StreamErrorConditionBadFormat struct {
-	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-streams bad-format"`
+// Per latest revision of RFC 6120, stream error conditions are empty elements.
+type StreamErrorCondition struct {
+	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-streams internal-server-error"` // Sensible default
 }
 
-// RFC 6120  4.9.3.9
-type StreamErrorConditionInvalidFrom struct {
-	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-streams invalid-from"`
-}
-
-// RFC 6120  4.9.3.12
-type StreamErrorConditionNotAuthorized struct {
-	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-streams not-authorized"`
-}
+var (
+	StreamErrorConditionBadFormat           = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "bad-format"}}
+	StreamErrorConditionHostUnknown         = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "host-unknown"}}
+	StreamErrorConditionInternalServerError = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "internal-server-error"}}
+	StreamErrorConditionInvalidFrom         = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "invalid-from"}}
+	StreamErrorConditionNotAuthorized       = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "not-authorized"}}
+)

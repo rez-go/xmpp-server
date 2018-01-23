@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ type Server struct {
 	DoneCh chan bool
 
 	name   string
-	domain string
+	domain string //TODO: support multiple
 
 	startTime time.Time
 	stopCh    chan bool
@@ -81,6 +82,7 @@ mainloop:
 	srv.listener.Close()
 
 	//TODO: notify all clients that this server is going down
+	// use system-shutdown stream error condition
 
 	srv.clientsWaitGroup.Wait()
 
@@ -147,9 +149,15 @@ func (srv *Server) newClient(conn net.Conn) (*Client, error) {
 func (srv *Server) serveClient(cl *Client) {
 	//TODO: on panic, simply close the connection.
 	defer func() {
+		if cl.conn != nil {
+			cl.conn.Close()
+			cl.conn = nil
+		}
+
 		srv.clientsMutex.Lock()
 		delete(srv.clients, cl.streamID)
 		srv.clientsMutex.Unlock()
+
 		srv.clientsWaitGroup.Done()
 	}()
 
@@ -165,6 +173,7 @@ mainloop:
 			break
 		}
 		//TODO: check for EndElement which closes the stream
+		//TODO: check for restricted-xml
 		switch token.(type) {
 		case xml.EndElement:
 			endElem := token.(xml.EndElement)
@@ -185,10 +194,37 @@ mainloop:
 
 		startElem := token.(xml.StartElement)
 		if startElem.Name.Space == xmppcore.JabberStreamsNS && startElem.Name.Local == "stream" {
-			var domain string
+			var toAttr, fromAttr string
 			for _, attr := range startElem.Attr {
-				if attr.Name.Local == "to" {
-					domain = attr.Value //TODO: compare with server's domain
+				switch attr.Name.Local {
+				case "to":
+					toAttr = attr.Value //TODO: parse JID
+				case "from":
+					fromAttr = attr.Value //TODO: parse JID
+				}
+			}
+			if toAttr != srv.domain {
+				resultXML, err := xml.Marshal(&xmppcore.StreamError{
+					Condition: xmppcore.StreamErrorConditionHostUnknown,
+				})
+				if err != nil {
+					panic(err)
+				}
+				cl.conn.Write(resultXML)
+				//TODO: close etc.
+				break mainloop
+			}
+			if fromAttr != "" {
+				if !strings.HasSuffix(fromAttr, srv.domain) {
+					resultXML, err := xml.Marshal(&xmppcore.StreamError{
+						Condition: xmppcore.StreamErrorConditionInvalidFrom,
+					})
+					if err != nil {
+						panic(err)
+					}
+					cl.conn.Write(resultXML)
+					//TODO: wait close?
+					break mainloop
 				}
 			}
 			var featuresXML []byte
@@ -208,12 +244,13 @@ mainloop:
 					panic(err)
 				}
 			}
+			//TODO: include to if provided
 			_, err = fmt.Fprintf(cl.conn, xml.Header+
 				"<stream:stream from='%s' xmlns='%s'"+
 				" id='%s' xml:lang='en'"+
 				" xmlns:stream='%s' version='1.0'>\n"+
 				string(featuresXML)+"\n",
-				xmlEscape(domain), xmppcore.JabberClientNS,
+				xmlEscape(srv.domain), xmppcore.JabberClientNS,
 				xmlEscape(cl.streamID), xmppcore.JabberStreamsNS)
 			if err != nil {
 				panic(err)
@@ -266,7 +303,7 @@ mainloop:
 				srv.finishClientNegotiation(cl)
 			} else {
 				authRespXML, err := xml.Marshal(&xmppcore.SASLFailure{
-					Condition: &xmppcore.StreamErrorConditionNotAuthorized{},
+					Condition: xmppcore.StreamErrorConditionNotAuthorized,
 					Text:      "Invalid username or password",
 				})
 				if err != nil {
@@ -312,9 +349,9 @@ func (srv *Server) handleClientIQ(cl *Client, iq *xmppcore.ClientIQ) {
 func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 	// Only one payload
 	reader := bytes.NewReader(iq.Payload)
-	decdr := xml.NewDecoder(reader)
+	decoder := xml.NewDecoder(reader)
 	for {
-		token, err := decdr.Token()
+		token, err := decoder.Token()
 		if err == io.EOF {
 			break
 		}
@@ -337,10 +374,10 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		case xmppvcard.ElementName:
 			element = &xmppvcard.IQSet{}
 		default:
-			panic("TODO")
+			panic(startElem.Name.Space + " " + startElem.Name.Local)
 		}
 
-		err = decdr.DecodeElement(element, &startElem)
+		err = decoder.DecodeElement(element, &startElem)
 		if err != nil {
 			panic(err)
 		}
@@ -401,9 +438,9 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 	// Only one payload
 	reader := bytes.NewReader(iq.Payload)
-	decdr := xml.NewDecoder(reader)
+	decoder := xml.NewDecoder(reader)
 	for {
-		token, err := decdr.Token()
+		token, err := decoder.Token()
 		if err == io.EOF {
 			break
 		}
@@ -420,7 +457,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
 				Warnf("Invalid from: %s", iq.From)
 			errorXML, err := xml.Marshal(xmppcore.StreamError{
-				Condition: &xmppcore.StreamErrorConditionInvalidFrom{},
+				Condition: xmppcore.StreamErrorConditionInvalidFrom,
 			})
 			if err != nil {
 				panic(err)
@@ -470,7 +507,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			panic(startElem.Name.Space)
 		}
 
-		err = decdr.DecodeElement(element, &startElem)
+		err = decoder.DecodeElement(element, &startElem)
 		if err != nil {
 			panic(err)
 		}

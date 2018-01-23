@@ -1,4 +1,4 @@
-package xmppimp
+package xmppim
 
 import (
 	"encoding/xml"

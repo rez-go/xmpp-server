@@ -18,7 +18,7 @@ import (
 
 	"sandbox/gobber/pkg/xmppcore"
 	"sandbox/gobber/pkg/xmppdisco"
-	"sandbox/gobber/pkg/xmppimp"
+	"sandbox/gobber/pkg/xmppim"
 	"sandbox/gobber/pkg/xmppvcard"
 )
 
@@ -228,8 +228,8 @@ mainloop:
 			element = &xmppcore.SASLAuth{}
 		case xmppcore.ClientIQElementName:
 			element = &xmppcore.ClientIQ{}
-		case xmppimp.ClientPresenceElementName:
-			element = &xmppimp.ClientPresence{}
+		case xmppim.ClientPresenceElementName:
+			element = &xmppim.ClientPresence{}
 		default:
 			logrus.WithFields(logrus.Fields{"stream": cl.sessionID}).
 				Warn("unexpected XMPP stanza: ", startElem.Name)
@@ -429,8 +429,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			//TODO: close connection, etc.
 			return
 		}
-		//TODO: this should be case-by-case, and in federation, we must
-		// relay the stanza
+		//TODO: check RFC 6120 8.1.1.1.
 		if iq.To != "" && iq.To != srv.domain {
 			logrus.WithFields(logrus.Fields{"stream": cl.sessionID, "jid": cl.jid.Full(), "stanza": iq.ID}).
 				Warnf("Invalid to: %s", iq.To)
@@ -465,8 +464,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			element = &xmppdisco.ItemsIQGet{}
 		case xmppvcard.ElementName:
 			element = &xmppvcard.IQGet{}
-		case xmppimp.RosterQueryElementName:
-			element = &xmppimp.RosterIQGet{}
+		case xmppim.RosterQueryElementName:
+			element = &xmppim.RosterIQGet{}
 		default:
 			panic(startElem.Name.Space)
 		}
@@ -539,8 +538,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			}
 			cl.conn.Write(resultXML)
 			return
-		case *xmppimp.RosterIQGet:
-			resultPayloadXML, err := xml.Marshal(xmppimp.RosterIQResult{})
+		case *xmppim.RosterIQGet:
+			resultPayloadXML, err := xml.Marshal(xmppim.RosterIQResult{})
 			if err != nil {
 				panic(err)
 			}

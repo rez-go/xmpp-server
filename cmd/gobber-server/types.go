@@ -10,7 +10,7 @@ import (
 type Client struct {
 	conn             net.Conn
 	negotiationState int
-	sessionID        string
+	streamID         string
 	xmlDecoder       *xml.Decoder
 	jid              xmppcore.JID
 }

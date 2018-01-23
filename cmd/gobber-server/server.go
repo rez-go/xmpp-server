@@ -118,7 +118,7 @@ func (srv *Server) listen() {
 			continue
 		}
 
-		logrus.WithFields(logrus.Fields{"stream": cl.sessionID}).Info("Client connected")
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Info("Client connected")
 		srv.clientsWaitGroup.Add(1)
 		go srv.serveClient(cl)
 	}
@@ -134,12 +134,12 @@ func (srv *Server) newClient(conn net.Conn) (*Client, error) {
 	}
 	cl := &Client{
 		conn:       conn,
-		sessionID:  sid,
+		streamID:   sid,
 		xmlDecoder: xml.NewDecoder(conn),
 		jid:        xmppcore.JID{Domain: srv.domain},
 	}
 	srv.clientsMutex.Lock()
-	srv.clients[cl.sessionID] = cl
+	srv.clients[cl.streamID] = cl
 	srv.clientsMutex.Unlock()
 	return cl, nil
 }
@@ -148,7 +148,7 @@ func (srv *Server) serveClient(cl *Client) {
 	//TODO: on panic, simply close the connection.
 	defer func() {
 		srv.clientsMutex.Lock()
-		delete(srv.clients, cl.sessionID)
+		delete(srv.clients, cl.streamID)
 		srv.clientsMutex.Unlock()
 		srv.clientsWaitGroup.Done()
 	}()
@@ -157,11 +157,11 @@ mainloop:
 	for {
 		token, err := cl.xmlDecoder.Token()
 		if err == io.EOF {
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID}).Info("Client disconnected")
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Info("Client disconnected")
 			break
 		}
 		if err != nil || token == nil {
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID}).Warn(err)
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Warn(err)
 			break
 		}
 		//TODO: check for EndElement which closes the stream
@@ -173,7 +173,7 @@ mainloop:
 				cl.conn.Close()
 				break mainloop
 			}
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID}).
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
 				Errorf("Unexpected EndElement: %#v", endElem)
 			panic(endElem)
 		case xml.StartElement:
@@ -214,7 +214,7 @@ mainloop:
 				" xmlns:stream='%s' version='1.0'>\n"+
 				string(featuresXML)+"\n",
 				xmlEscape(domain), xmppcore.JabberClientNS,
-				xmlEscape(cl.sessionID), xmppcore.JabberStreamsNS)
+				xmlEscape(cl.streamID), xmppcore.JabberStreamsNS)
 			if err != nil {
 				panic(err)
 			}
@@ -231,7 +231,7 @@ mainloop:
 		case xmppim.ClientPresenceElementName:
 			element = &xmppim.ClientPresence{}
 		default:
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID}).
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
 				Warn("unexpected XMPP stanza: ", startElem.Name)
 			continue
 		}
@@ -277,7 +277,7 @@ mainloop:
 		case *xmppcore.ClientIQ:
 			srv.handleClientIQ(cl, element.(*xmppcore.ClientIQ))
 		default:
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID}).Errorf("%#v", element)
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Errorf("%#v", element)
 		}
 	}
 }
@@ -288,9 +288,9 @@ func (srv *Server) finishClientNegotiation(cl *Client) {
 		panic(err)
 	}
 	srv.clientsMutex.Lock()
-	delete(srv.clients, cl.sessionID)
-	cl.sessionID = sid
-	srv.clients[cl.sessionID] = cl
+	delete(srv.clients, cl.streamID)
+	cl.streamID = sid
+	srv.clients[cl.streamID] = cl
 	srv.clientsMutex.Unlock()
 }
 
@@ -349,7 +349,7 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		case *xmppcore.BindIQSet:
 			//TODO: if not provided, generate. also, if configured, override.
 			cl.jid.Resource = payload.Resource.CharData //TODO: normalize
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID, "jid": cl.jid.Full()}).
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
 				Info("Bound!")
 
 			resultPayloadXML, err := xml.Marshal(&xmppcore.BindIQResult{
@@ -417,7 +417,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 
 		// RFC 6120  4.9.3.9
 		if iq.From != "" && iq.From != cl.jid.Full() {
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID, "jid": cl.jid.Full(), "stanza": iq.ID}).
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
 				Warnf("Invalid from: %s", iq.From)
 			errorXML, err := xml.Marshal(xmppcore.StreamError{
 				Condition: &xmppcore.StreamErrorConditionInvalidFrom{},
@@ -431,7 +431,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		}
 		//TODO: check RFC 6120 8.1.1.1.
 		if iq.To != "" && iq.To != srv.domain {
-			logrus.WithFields(logrus.Fields{"stream": cl.sessionID, "jid": cl.jid.Full(), "stanza": iq.ID}).
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
 				Warnf("Invalid to: %s", iq.To)
 			errorXML, err := xml.Marshal(xmppcore.StanzaError{
 				Type:      xmppcore.StanzaErrorTypeCancel,

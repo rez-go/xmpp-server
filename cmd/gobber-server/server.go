@@ -179,6 +179,7 @@ mainloop:
 		case xml.EndElement:
 			endElem := token.(xml.EndElement)
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
+				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Info("Disconnecting client")
 				cl.conn.Write([]byte("</stream:stream>"))
 				cl.conn.Close()
 				break mainloop
@@ -260,62 +261,20 @@ mainloop:
 			continue
 		}
 
-		var element interface{}
 		switch startElem.Name.Space + " " + startElem.Name.Local {
 		case xmppcore.SASLAuthElementName:
-			element = &xmppcore.SASLAuth{}
+			srv.handleClientSASLAuth(cl, &startElem)
+			continue
 		case xmppcore.ClientIQElementName:
-			element = &xmppcore.ClientIQ{}
+			srv.handleClientIQ(cl, &startElem)
+			continue
 		case xmppim.ClientPresenceElementName:
-			element = &xmppim.ClientPresence{}
+			srv.handleClientPresence(cl, &startElem)
+			continue
 		default:
 			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
 				Warn("unexpected XMPP stanza: ", startElem.Name)
 			continue
-		}
-
-		err = cl.xmlDecoder.DecodeElement(element, &startElem)
-		if err != nil {
-			panic(err)
-		}
-
-		switch element.(type) {
-		case *xmppcore.SASLAuth:
-			saslAuth := element.(*xmppcore.SASLAuth)
-			if saslAuth.Mechanism != "PLAIN" {
-				panic("unsupported SASL mechanish")
-			}
-			authBytes, err := base64.StdEncoding.DecodeString(saslAuth.CharData)
-			if err != nil {
-				panic(err)
-			}
-			authSegments := bytes.SplitN(authBytes, []byte{0}, 3)
-			if len(authSegments) != 3 {
-				panic("there should be 3 parts here")
-			}
-			if string(authSegments[1]) == "admin" && string(authSegments[2]) == "passw0rd" {
-				authRespXML, err := xml.Marshal(&xmppcore.SASLSuccess{})
-				if err != nil {
-					panic(err)
-				}
-				cl.conn.Write(authRespXML)
-				cl.negotiationState = 2
-				cl.jid.Local = string(authSegments[1]) //TODO: normalize
-				srv.finishClientNegotiation(cl)
-			} else {
-				authRespXML, err := xml.Marshal(&xmppcore.SASLFailure{
-					Condition: xmppcore.StreamErrorConditionNotAuthorized,
-					Text:      "Invalid username or password",
-				})
-				if err != nil {
-					panic(err)
-				}
-				cl.conn.Write(authRespXML)
-			}
-		case *xmppcore.ClientIQ:
-			srv.handleClientIQ(cl, element.(*xmppcore.ClientIQ))
-		default:
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Errorf("%#v", element)
 		}
 	}
 }
@@ -336,12 +295,60 @@ func (srv *Server) startClientTLS(cl *Client) {
 
 }
 
-func (srv *Server) handleClientIQ(cl *Client, iq *xmppcore.ClientIQ) {
+func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement) {
+	var saslAuth xmppcore.SASLAuth
+
+	err := cl.xmlDecoder.DecodeElement(&saslAuth, startElem)
+	if err != nil {
+		panic(err)
+	}
+
+	if saslAuth.Mechanism != "PLAIN" {
+		panic("unsupported SASL mechanish")
+	}
+	authBytes, err := base64.StdEncoding.DecodeString(saslAuth.CharData)
+	if err != nil {
+		panic(err)
+	}
+	authSegments := bytes.SplitN(authBytes, []byte{0}, 3)
+	if len(authSegments) != 3 {
+		panic("there should be 3 parts here")
+	}
+	if string(authSegments[1]) == "admin" && string(authSegments[2]) == "passw0rd" {
+		authRespXML, err := xml.Marshal(&xmppcore.SASLSuccess{})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(authRespXML)
+		cl.negotiationState = 2
+		cl.jid.Local = string(authSegments[1]) //TODO: normalize
+		srv.finishClientNegotiation(cl)
+	} else {
+		authRespXML, err := xml.Marshal(&xmppcore.SASLFailure{
+			Condition: xmppcore.StreamErrorConditionNotAuthorized,
+			Text:      "Invalid username or password",
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(authRespXML)
+	}
+}
+
+func (srv *Server) handleClientIQ(cl *Client, startElem *xml.StartElement) {
+	var iq xmppcore.ClientIQ
+	//NOTE: decoding the whole element might not the best practice.
+	// some IQs might better be streamed.
+	err := cl.xmlDecoder.DecodeElement(&iq, startElem)
+	if err != nil {
+		panic(err)
+	}
+
 	switch iq.Type {
 	case xmppcore.IQTypeSet:
-		srv.handleClientIQSet(cl, iq)
+		srv.handleClientIQSet(cl, &iq)
 	case xmppcore.IQTypeGet:
-		srv.handleClientIQGet(cl, iq)
+		srv.handleClientIQGet(cl, &iq)
 	default:
 		panic(iq.Type)
 	}
@@ -610,6 +617,16 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			return
 		}
 	}
+}
+
+//TODO: move to xmppim
+func (srv *Server) handleClientPresence(cl *Client, startElem *xml.StartElement) {
+	var presence xmppim.ClientPresence
+	err := cl.xmlDecoder.DecodeElement(&presence, startElem)
+	if err != nil {
+		panic(err)
+	}
+	//TODO: broadcast to those subscribed
 }
 
 func (srv *Server) generateSessionID() (string, error) {

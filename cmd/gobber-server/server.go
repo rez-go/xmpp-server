@@ -20,6 +20,7 @@ import (
 	"sandbox/gobber/pkg/xmppcore"
 	"sandbox/gobber/pkg/xmppdisco"
 	"sandbox/gobber/pkg/xmppim"
+	"sandbox/gobber/pkg/xmppping"
 	"sandbox/gobber/pkg/xmppvcard"
 )
 
@@ -503,8 +504,10 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			element = &xmppvcard.IQGet{}
 		case xmppim.RosterQueryElementName:
 			element = &xmppim.RosterIQGet{}
+		case xmppping.ElementName:
+			element = &xmppping.Ping{}
 		default:
-			panic(startElem.Name.Space)
+			panic(startElem.Name.Space + " " + startElem.Name.Local)
 		}
 
 		err = decoder.DecodeElement(element, &startElem)
@@ -586,6 +589,19 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 				From:    srv.domain,
 				To:      cl.jid.Full(),
 				Payload: resultPayloadXML,
+			})
+			if err != nil {
+				panic(err)
+			}
+			cl.conn.Write(resultXML)
+			return
+		case *xmppping.Ping:
+			//TODO: support various cases (s2c, c2s, s2s, ...)
+			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+				ID:   iq.ID,
+				Type: xmppcore.IQTypeResult,
+				From: srv.domain,
+				To:   cl.jid.Full(),
 			})
 			if err != nil {
 				panic(err)

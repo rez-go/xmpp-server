@@ -21,8 +21,12 @@ import (
 	"sandbox/gobber/pkg/xmppdisco"
 	"sandbox/gobber/pkg/xmppim"
 	"sandbox/gobber/pkg/xmppping"
+	"sandbox/gobber/pkg/xmppprivate"
 	"sandbox/gobber/pkg/xmppvcard"
 )
+
+//TODO: use locking to ensure that there will be one write into
+// the connection.
 
 type Server struct {
 	DoneCh chan bool
@@ -165,13 +169,22 @@ func (srv *Server) serveClient(cl *Client) {
 mainloop:
 	for {
 		token, err := cl.xmlDecoder.Token()
-		if err == io.EOF {
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Info("Client disconnected")
-			break
+		if err != nil {
+			if xmlErr, _ := err.(*xml.SyntaxError); xmlErr != nil {
+				if xmlErr.Line == 1 && xmlErr.Msg == "unexpected EOF" {
+					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+						Info("Client disconnected")
+					break mainloop
+				}
+			}
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+				Errorf("Unexpected error: %#v", err)
+			break mainloop
 		}
-		if err != nil || token == nil {
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Warn(err)
-			break
+		if token == nil {
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+				Errorf("Token is nil")
+			break mainloop
 		}
 
 		//TODO: check for EndElement which closes the stream
@@ -455,178 +468,198 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 }
 
 func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
-	// Only one payload
+	// There should only one payload (TODO: check the spec on how
+	// to handle multiple child element)
 	reader := bytes.NewReader(iq.Payload)
 	decoder := xml.NewDecoder(reader)
-	for {
-		token, err := decoder.Token()
-		if err == io.EOF {
-			break
-		}
 
-		switch token.(type) {
-		case xml.StartElement:
-			// Pass
-		default:
-			panic(token)
-		}
+	token, err := decoder.Token()
+	if err == io.EOF {
+		return
+	}
 
-		// RFC 6120  4.9.3.9
-		if iq.From != "" && iq.From != cl.jid.Full() {
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
-				Warnf("Invalid from: %s", iq.From)
-			errorXML, err := xml.Marshal(xmppcore.StreamError{
-				Condition: xmppcore.StreamErrorConditionInvalidFrom,
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write([]byte(string(errorXML) + "\n</stream:stream>\n"))
-			//TODO: close connection, etc.
-			return
-		}
-		//TODO: check RFC 6120 8.1.1.1.
-		if iq.To != "" && iq.To != srv.domain {
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
-				Warnf("Invalid to: %s", iq.To)
-			errorXML, err := xml.Marshal(xmppcore.StanzaError{
-				Type:      xmppcore.StanzaErrorTypeCancel,
-				Condition: &xmppcore.StanzaErrorConditionServiceUnavailable{},
-			})
-			if err != nil {
-				panic(err)
-			}
-			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
-				ID:      iq.ID,
-				Type:    xmppcore.IQTypeError,
-				From:    srv.domain,
-				To:      cl.jid.Full(),
-				Payload: errorXML,
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
-		}
+	switch token.(type) {
+	case xml.StartElement:
+		// Pass
+	default:
+		panic(token)
+	}
 
-		startElem := token.(xml.StartElement)
-
-		var element interface{}
-		switch startElem.Name.Space + " " + startElem.Name.Local {
-		case xmppdisco.InfoQueryElementName:
-			element = &xmppdisco.InfoIQGet{}
-		case xmppdisco.ItemsQueryElementName:
-			element = &xmppdisco.ItemsIQGet{}
-		case xmppvcard.ElementName:
-			element = &xmppvcard.IQGet{}
-		case xmppim.RosterQueryElementName:
-			element = &xmppim.RosterIQGet{}
-		case xmppping.ElementName:
-			element = &xmppping.Ping{}
-		default:
-			panic(startElem.Name.Space + " " + startElem.Name.Local)
-		}
-
-		err = decoder.DecodeElement(element, &startElem)
+	// RFC 6120  4.9.3.9
+	if iq.From != "" && iq.From != cl.jid.Full() {
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
+			Warnf("Invalid from: %s", iq.From)
+		errorXML, err := xml.Marshal(xmppcore.StreamError{
+			Condition: xmppcore.StreamErrorConditionInvalidFrom,
+		})
 		if err != nil {
 			panic(err)
 		}
-
-		switch element.(type) {
-		case *xmppdisco.InfoIQGet:
-			//TODO: check the target resource etc.
-			queryResultXML, err := xml.Marshal(xmppdisco.InfoIQResult{
-				Identity: []xmppdisco.Identity{
-					{Category: xmppdisco.IdentityCategoryServer, Type: "im", Name: "gobber"},
-				},
-				Feature: []xmppdisco.Feature{
-					{Var: "iq"},
-				},
-			})
-			if err != nil {
-				panic(err)
-			}
-			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
-				ID:      iq.ID,
-				Type:    xmppcore.IQTypeResult,
-				From:    srv.domain, //TODO: server's JID
-				To:      cl.jid.Full(),
-				Payload: queryResultXML,
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
-		case *xmppdisco.ItemsIQGet:
-			//TODO: check the target resource etc.
-			//TODO: conference, pubsub, etc.
-			queryResultXML, err := xml.Marshal(xmppdisco.ItemsIQResult{})
-			if err != nil {
-				panic(err)
-			}
-			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
-				ID:      iq.ID,
-				Type:    xmppcore.IQTypeResult,
-				From:    srv.domain,
-				To:      cl.jid.Full(),
-				Payload: queryResultXML,
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
-		case *xmppvcard.IQGet:
-			//TODO: check `from` etc.
-			resultPayloadXML, err := xml.Marshal(xmppvcard.IQResult{})
-			if err != nil {
-				panic(err)
-			}
-			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
-				ID:      iq.ID,
-				Type:    xmppcore.IQTypeResult,
-				From:    srv.domain,
-				To:      cl.jid.Full(),
-				Payload: resultPayloadXML,
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
-		case *xmppim.RosterIQGet:
-			resultPayloadXML, err := xml.Marshal(xmppim.RosterIQResult{})
-			if err != nil {
-				panic(err)
-			}
-			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
-				ID:      iq.ID,
-				Type:    xmppcore.IQTypeResult,
-				From:    srv.domain,
-				To:      cl.jid.Full(),
-				Payload: resultPayloadXML,
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
-		case *xmppping.Ping:
-			//TODO: support various cases (s2c, c2s, s2s, ...)
-			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
-				ID:   iq.ID,
-				Type: xmppcore.IQTypeResult,
-				From: srv.domain,
-				To:   cl.jid.Full(),
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
+		cl.conn.Write([]byte(string(errorXML) + "\n</stream:stream>\n"))
+		//TODO: close connection, etc.
+		return
+	}
+	//TODO: check RFC 6120 8.1.1.1.
+	if iq.To != "" && iq.To != srv.domain {
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
+			Warnf("Invalid to: %s", iq.To)
+		errorXML, err := xml.Marshal(xmppcore.StanzaError{
+			Type:      xmppcore.StanzaErrorTypeCancel,
+			Condition: xmppcore.StanzaErrorConditionServiceUnavailable,
+		})
+		if err != nil {
+			panic(err)
 		}
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeError,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: errorXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
+	}
+
+	startElem := token.(xml.StartElement)
+
+	var element interface{}
+	switch startElem.Name.Space + " " + startElem.Name.Local {
+	case xmppdisco.InfoQueryElementName:
+		element = &xmppdisco.InfoIQGet{}
+	case xmppdisco.ItemsQueryElementName:
+		element = &xmppdisco.ItemsIQGet{}
+	case xmppvcard.ElementName:
+		element = &xmppvcard.IQGet{}
+	case xmppim.RosterQueryElementName:
+		element = &xmppim.RosterIQGet{}
+	case xmppping.ElementName:
+		element = &xmppping.IQGet{}
+	case xmppprivate.ElementName:
+		errorXML, err := xml.Marshal(&xmppcore.StanzaError{
+			Type:      xmppcore.StanzaErrorTypeCancel,
+			Condition: xmppcore.StanzaErrorConditionFeatureNotImplemented,
+		})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeError,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: errorXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
+	default:
+		panic(startElem.Name.Space + " " + startElem.Name.Local)
+	}
+
+	err = decoder.DecodeElement(element, &startElem)
+	if err != nil {
+		panic(err)
+	}
+
+	switch element.(type) {
+	case *xmppdisco.InfoIQGet:
+		//TODO: check the target resource etc.
+		queryResultXML, err := xml.Marshal(xmppdisco.InfoIQResult{
+			Identity: []xmppdisco.Identity{
+				{Category: xmppdisco.IdentityCategoryServer, Type: "im", Name: "gobber"},
+			},
+			Feature: []xmppdisco.Feature{
+				{Var: "iq"},
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeResult,
+			From:    srv.domain, //TODO: server's JID
+			To:      cl.jid.Full(),
+			Payload: queryResultXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
+	case *xmppdisco.ItemsIQGet:
+		//TODO: check the target resource etc.
+		//TODO: conference, pubsub, etc.
+		queryResultXML, err := xml.Marshal(xmppdisco.ItemsIQResult{})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeResult,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: queryResultXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
+	case *xmppvcard.IQGet:
+		//TODO: check `from` etc.
+		resultPayloadXML, err := xml.Marshal(xmppvcard.IQResult{})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeResult,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: resultPayloadXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
+	case *xmppim.RosterIQGet:
+		resultPayloadXML, err := xml.Marshal(xmppim.RosterIQResult{})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeResult,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: resultPayloadXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
+	case *xmppping.Ping:
+		//TODO: support various cases (s2c, c2s, s2s, ...)
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:   iq.ID,
+			Type: xmppcore.IQTypeResult,
+			From: srv.domain,
+			To:   cl.jid.Full(),
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
 	}
 }
 

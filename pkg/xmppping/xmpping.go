@@ -5,10 +5,11 @@ import (
 	"encoding/xml"
 )
 
-const NS = "urn:xmpp:ping"
+const (
+	NS          = "urn:xmpp:ping"
+	ElementName = NS + " ping"
+)
 
-const ElementName = NS + " ping"
-
-type Ping struct {
+type IQGet struct {
 	XMLName xml.Name `xml:"urn:xmpp:ping ping"`
 }

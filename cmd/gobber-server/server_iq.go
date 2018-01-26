@@ -38,88 +38,116 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 	// Only one payload
 	reader := bytes.NewReader(iq.Payload)
 	decoder := xml.NewDecoder(reader)
-	for {
-		token, err := decoder.Token()
-		if err == io.EOF {
-			break
+
+	token, err := decoder.Token()
+	if err == io.EOF {
+		return
+	}
+	if err != nil {
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
+			Errorf("Unexpected error: %#v", err)
+		return
+	}
+
+	switch token.(type) {
+	case xml.StartElement:
+		// Pass
+	default:
+		panic(token)
+	}
+
+	startElem := token.(xml.StartElement)
+
+	var element interface{}
+	switch startElem.Name.Space + " " + startElem.Name.Local {
+	case xmppcore.BindBindElementName:
+		element = &xmppcore.BindIQSet{}
+	case xmppcore.SessionSessionElementName:
+		element = &xmppcore.SessionIQSet{}
+	case xmppvcard.ElementName:
+		element = &xmppvcard.IQSet{}
+	default:
+		panic(startElem.Name.Space + " " + startElem.Name.Local)
+	}
+
+	err = decoder.DecodeElement(element, &startElem)
+	if err != nil {
+		panic(err)
+	}
+
+	switch payload := element.(type) {
+	case *xmppcore.BindIQSet:
+		//TODO: if not provided, generate. also, if configured, override.
+		cl.jid.Resource = payload.Resource.CharData //TODO: normalize
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
+			Info("Bound!")
+
+		resultPayloadXML, err := xml.Marshal(&xmppcore.BindIQResult{
+			JID: xmppcore.BindJID{CharData: cl.jid.Full()},
+		})
+		if err != nil {
+			panic(err)
 		}
-
-		switch token.(type) {
-		case xml.StartElement:
-			// Pass
-		default:
-			panic(token)
-		}
-
-		startElem := token.(xml.StartElement)
-
-		var element interface{}
-		switch startElem.Name.Space + " " + startElem.Name.Local {
-		case xmppcore.BindBindElementName:
-			element = &xmppcore.BindIQSet{}
-		case xmppcore.SessionSessionElementName:
-			element = &xmppcore.SessionIQSet{}
-		case xmppvcard.ElementName:
-			element = &xmppvcard.IQSet{}
-		default:
-			panic(startElem.Name.Space + " " + startElem.Name.Local)
-		}
-
-		err = decoder.DecodeElement(element, &startElem)
+		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeResult,
+			Payload: resultPayloadXML,
+		})
 		if err != nil {
 			panic(err)
 		}
 
-		switch payload := element.(type) {
-		case *xmppcore.BindIQSet:
-			//TODO: if not provided, generate. also, if configured, override.
-			cl.jid.Resource = payload.Resource.CharData //TODO: normalize
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
-				Info("Bound!")
-
-			resultPayloadXML, err := xml.Marshal(&xmppcore.BindIQResult{
-				JID: xmppcore.BindJID{CharData: cl.jid.Full()},
-			})
-			if err != nil {
-				panic(err)
-			}
-			resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
-				ID:      iq.ID,
-				Type:    xmppcore.IQTypeResult,
-				Payload: resultPayloadXML,
-			})
-			if err != nil {
-				panic(err)
-			}
-
-			cl.conn.Write(resultXML)
-			return
-		case *xmppcore.SessionIQSet:
-			resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
-				ID:   iq.ID,
-				Type: xmppcore.IQTypeResult,
-				From: cl.jid.Bare(),
-				To:   cl.jid.Full(),
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
-		case *xmppvcard.IQSet:
-			//TODO: save the vCard
-			resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
-				ID:   iq.ID,
-				Type: xmppcore.IQTypeResult,
-				From: srv.domain,
-				To:   cl.jid.Full(),
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return
+		cl.conn.Write(resultXML)
+		return
+	case *xmppcore.SessionIQSet:
+		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
+			ID:   iq.ID,
+			Type: xmppcore.IQTypeResult,
+			From: cl.jid.Bare(),
+			To:   cl.jid.Full(),
+		})
+		if err != nil {
+			panic(err)
 		}
+		cl.conn.Write(resultXML)
+		return
+	case *xmppvcard.IQSet:
+		//TODO: save the vCard
+		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
+			ID:   iq.ID,
+			Type: xmppcore.IQTypeResult,
+			From: srv.domain,
+			To:   cl.jid.Full(),
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
+	}
+
+	// An IQ stanza of type "get" or "set" MUST contain exactly
+	// one child element, which specifies the semantics of the
+	// particular request.
+	if _, err := decoder.Token(); err != io.EOF {
+		errorXML, err := xml.Marshal(xmppcore.StanzaError{
+			Type:      xmppcore.StanzaErrorTypeModify,
+			Condition: xmppcore.StanzaErrorConditionBadRequest,
+		})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeError,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: errorXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
 	}
 }
 

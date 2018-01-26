@@ -170,10 +170,15 @@ mainloop:
 	for {
 		token, err := cl.xmlDecoder.Token()
 		if err != nil {
+			if err == io.EOF {
+				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+					Info("Client disconnected")
+				break mainloop
+			}
 			if xmlErr, _ := err.(*xml.SyntaxError); xmlErr != nil {
 				if xmlErr.Line == 1 && xmlErr.Msg == "unexpected EOF" {
 					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
-						Info("Client disconnected")
+						Info("Client disconnected without closing the stream")
 					break mainloop
 				}
 			}
@@ -468,13 +473,16 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 }
 
 func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
-	// There should only one payload (TODO: check the spec on how
-	// to handle multiple child element)
 	reader := bytes.NewReader(iq.Payload)
 	decoder := xml.NewDecoder(reader)
 
 	token, err := decoder.Token()
 	if err == io.EOF {
+		return
+	}
+	if err != nil {
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
+			Errorf("Unexpected error: %#v", err)
 		return
 	}
 
@@ -647,7 +655,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		}
 		cl.conn.Write(resultXML)
 		return
-	case *xmppping.Ping:
+	case *xmppping.IQGet:
 		//TODO: support various cases (s2c, c2s, s2s, ...)
 		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 			ID:   iq.ID,
@@ -660,6 +668,30 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		}
 		cl.conn.Write(resultXML)
 		return
+	}
+
+	// An IQ stanza of type "get" or "set" MUST contain exactly
+	// one child element, which specifies the semantics of the
+	// particular request.
+	if _, err := decoder.Token(); err != io.EOF {
+		errorXML, err := xml.Marshal(xmppcore.StanzaError{
+			Type:      xmppcore.StanzaErrorTypeModify,
+			Condition: xmppcore.StanzaErrorConditionBadRequest,
+		})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeError,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: errorXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
 	}
 }
 

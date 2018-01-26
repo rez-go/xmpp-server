@@ -166,11 +166,14 @@ mainloop:
 	for {
 		token, err := cl.xmlDecoder.Token()
 		if err != nil {
+			// Clean disconnection
 			if err == io.EOF {
 				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
 					Info("Client disconnected")
 				break mainloop
 			}
+			// Un-clean disconnection (the connection is closed while
+			// the stream is still open)
 			if xmlErr, _ := err.(*xml.SyntaxError); xmlErr != nil {
 				if xmlErr.Line == 1 && xmlErr.Msg == "unexpected EOF" {
 					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
@@ -194,7 +197,8 @@ mainloop:
 		case xml.EndElement:
 			endElem := token.(xml.EndElement)
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
-				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Info("Disconnecting client")
+				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+					Info("Client closed the stream. Closing connection....")
 				cl.conn.Write([]byte("</stream:stream>"))
 				cl.conn.Close()
 				break mainloop

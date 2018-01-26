@@ -66,6 +66,26 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		element = &xmppcore.SessionIQSet{}
 	case xmppvcard.ElementName:
 		element = &xmppvcard.IQSet{}
+	case xmppprivate.ElementName:
+		errorXML, err := xml.Marshal(&xmppcore.StanzaError{
+			Type:      xmppcore.StanzaErrorTypeCancel,
+			Condition: xmppcore.StanzaErrorConditionFeatureNotImplemented,
+		})
+		if err != nil {
+			panic(err)
+		}
+		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
+			ID:      iq.ID,
+			Type:    xmppcore.IQTypeError,
+			From:    srv.domain,
+			To:      cl.jid.Full(),
+			Payload: errorXML,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return
 	default:
 		panic(startElem.Name.Space + " " + startElem.Name.Local)
 	}

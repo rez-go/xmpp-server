@@ -38,8 +38,6 @@ type StreamError struct {
 // RFC 6120  4.9.3  Defined Stream Error Conditions
 
 // Per latest revision of RFC 6120, stream error conditions are empty elements.
-//
-// We put a sensible default condition which is internal-server-error
 type StreamErrorCondition struct {
 	XMLName xml.Name
 }

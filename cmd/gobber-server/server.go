@@ -173,6 +173,7 @@ mainloop:
 			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Warn(err)
 			break
 		}
+
 		//TODO: check for EndElement which closes the stream
 		//TODO: check for restricted-xml
 		switch token.(type) {
@@ -195,73 +196,15 @@ mainloop:
 		}
 
 		startElem := token.(xml.StartElement)
-		if startElem.Name.Space == xmppcore.JabberStreamsNS && startElem.Name.Local == "stream" {
-			var toAttr, fromAttr string
-			for _, attr := range startElem.Attr {
-				switch attr.Name.Local {
-				case "to":
-					toAttr = attr.Value //TODO: parse JID
-				case "from":
-					fromAttr = attr.Value //TODO: parse JID
-				}
-			}
-			if toAttr != srv.domain {
-				resultXML, err := xml.Marshal(&xmppcore.StreamError{
-					Condition: xmppcore.StreamErrorConditionHostUnknown,
-				})
-				if err != nil {
-					panic(err)
-				}
-				cl.conn.Write(resultXML)
-				//TODO: close etc.
-				break mainloop
-			}
-			if fromAttr != "" {
-				if !strings.HasSuffix(fromAttr, srv.domain) {
-					resultXML, err := xml.Marshal(&xmppcore.StreamError{
-						Condition: xmppcore.StreamErrorConditionInvalidFrom,
-					})
-					if err != nil {
-						panic(err)
-					}
-					cl.conn.Write(resultXML)
-					//TODO: wait close?
-					break mainloop
-				}
-			}
-			var featuresXML []byte
-			if cl.negotiationState == 2 {
-				featuresXML, err = xml.Marshal(&xmppcore.StreamFeatures{})
-				if err != nil {
-					panic(err)
-				}
-			} else {
-				//TODO: get features from the config and mods
-				featuresXML, err = xml.Marshal(&xmppcore.NegotiationStreamFeatures{
-					Mechanisms: &xmppcore.SASLMechanisms{
-						Mechanism: []string{"PLAIN"},
-					},
-				})
-				if err != nil {
-					panic(err)
-				}
-			}
-			//TODO: include to if provided
-			_, err = fmt.Fprintf(cl.conn, xml.Header+
-				"<stream:stream from='%s' xmlns='%s'"+
-				" id='%s' xml:lang='en'"+
-				" xmlns:stream='%s' version='1.0'>\n"+
-				string(featuresXML)+"\n",
-				xmlEscape(srv.domain), xmppcore.JabberClientNS,
-				xmlEscape(cl.streamID), xmppcore.JabberStreamsNS)
-			if err != nil {
-				panic(err)
-			}
-
-			continue
-		}
 
 		switch startElem.Name.Space + " " + startElem.Name.Local {
+		case xmppcore.StreamStreamElementName:
+			if srv.handlerClientStreamOpen(cl, &startElem) {
+				continue
+			}
+			//TODO: graceful close
+			cl.conn.Write([]byte("</stream:stream>"))
+			break mainloop
 		case xmppcore.SASLAuthElementName:
 			srv.handleClientSASLAuth(cl, &startElem)
 			continue
@@ -277,6 +220,74 @@ mainloop:
 			continue
 		}
 	}
+}
+
+func (srv *Server) handlerClientStreamOpen(cl *Client, startElem *xml.StartElement) bool {
+	var toAttr, fromAttr string
+	for _, attr := range startElem.Attr {
+		switch attr.Name.Local {
+		case "to":
+			toAttr = attr.Value //TODO: parse JID
+		case "from":
+			fromAttr = attr.Value //TODO: parse JID
+		}
+	}
+
+	if toAttr != srv.domain {
+		resultXML, err := xml.Marshal(&xmppcore.StreamError{
+			Condition: xmppcore.StreamErrorConditionHostUnknown,
+		})
+		if err != nil {
+			panic(err)
+		}
+		cl.conn.Write(resultXML)
+		return false
+	}
+	if fromAttr != "" {
+		if !strings.HasSuffix(fromAttr, srv.domain) {
+			resultXML, err := xml.Marshal(&xmppcore.StreamError{
+				Condition: xmppcore.StreamErrorConditionInvalidFrom,
+			})
+			if err != nil {
+				panic(err)
+			}
+			cl.conn.Write(resultXML)
+			return false
+		}
+	}
+
+	var err error
+	var featuresXML []byte
+	if cl.negotiationState == 2 {
+		featuresXML, err = xml.Marshal(&xmppcore.StreamFeatures{})
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		//TODO: get features from the config and mods
+		featuresXML, err = xml.Marshal(&xmppcore.NegotiationStreamFeatures{
+			Mechanisms: &xmppcore.SASLMechanisms{
+				Mechanism: []string{"PLAIN"},
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	//TODO: include 'to' if provided
+	_, err = fmt.Fprintf(cl.conn, xml.Header+
+		"<stream:stream from='%s' xmlns='%s'"+
+		" id='%s' xml:lang='en'"+
+		" xmlns:stream='%s' version='1.0'>\n"+
+		string(featuresXML)+"\n",
+		xmlEscape(srv.domain), xmppcore.JabberClientNS,
+		xmlEscape(cl.streamID), xmppcore.JabberStreamsNS)
+	if err != nil {
+		panic(err)
+	}
+
+	return true
 }
 
 func (srv *Server) finishClientNegotiation(cl *Client) {

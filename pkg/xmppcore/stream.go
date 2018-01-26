@@ -4,7 +4,10 @@ import (
 	"encoding/xml"
 )
 
-const StreamErrorElementName = JabberStreamsNS + " error"
+const (
+	StreamStreamElementName = JabberStreamsNS + " stream"
+	StreamErrorElementName  = JabberStreamsNS + " error"
+)
 
 // RFC 6120  4.3.2  Streams Features Format
 

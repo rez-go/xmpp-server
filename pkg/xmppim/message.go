@@ -24,7 +24,7 @@ const (
 
 type ClientMessage struct {
 	XMLName xml.Name `xml:"jabber:client message"`
-	ID      string   `xml:"id,attr"`
+	ID      string   `xml:"id,attr,omitempty"`
 	From    string   `xml:"from,attr,omitempty"` //TODO: JID type
 	To      string   `xml:"to,attr,omitempty"`   //TODO: JID type
 	Type    string   `xml:"type,attr"`           // Any of MessageType*

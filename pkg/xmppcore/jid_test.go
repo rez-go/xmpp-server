@@ -56,6 +56,8 @@ func TestParseJID(t *testing.T) {
 		{"juliet@example.com", JID{Local: "juliet", Domain: "example.com"}, nil},
 		{"juliet@example.com/foo", JID{Local: "juliet", Domain: "example.com", Resource: "foo"}, nil},
 		{"example.com", JID{Domain: "example.com"}, nil},
+		{"example.com/foobar", JID{Domain: "example.com", Resource: "foobar"}, nil},
+		{"a.example.com/b@example.net", JID{Domain: "a.example.com", Resource: "b@example.net"}, nil},
 	}
 
 	for _, data := range testData {

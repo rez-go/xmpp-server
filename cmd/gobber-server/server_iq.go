@@ -18,7 +18,7 @@ import (
 func (srv *Server) handleClientIQ(cl *Client, startElem *xml.StartElement) {
 	var iq xmppcore.ClientIQ
 	//NOTE: decoding the whole element might not the best practice.
-	// some IQs might better be streamed.
+	// generally we want to stream the child elements.
 	err := cl.xmlDecoder.DecodeElement(&iq, startElem)
 	if err != nil {
 		panic(err)

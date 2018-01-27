@@ -164,6 +164,9 @@ func (srv *Server) serveClient(cl *Client) {
 		srv.clientsMutex.Unlock()
 
 		srv.clientsWaitGroup.Done()
+
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
+			Info("Client disconnected")
 	}()
 
 mainloop:
@@ -172,8 +175,8 @@ mainloop:
 		if err != nil {
 			// Clean disconnection
 			if err == io.EOF {
-				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
-					Info("Client disconnected")
+				logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
+					Info("Client connection closed")
 				break mainloop
 			}
 			// Un-clean disconnection (the connection is closed while
@@ -181,7 +184,7 @@ mainloop:
 			if xmlErr, _ := err.(*xml.SyntaxError); xmlErr != nil {
 				if xmlErr.Line == 1 && xmlErr.Msg == "unexpected EOF" {
 					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
-						Info("Client disconnected without closing the stream")
+						Info("Client connection closed without closing the stream")
 					break mainloop
 				}
 			}
@@ -202,7 +205,7 @@ mainloop:
 			endElem := token.(xml.EndElement)
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
 				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
-					Info("Client closed the stream. Closing connection....")
+					Info("Client closed the stream. Disconnecting client....")
 				cl.conn.Write([]byte("</stream:stream>"))
 				cl.conn.Close()
 				break mainloop
@@ -235,6 +238,9 @@ mainloop:
 			continue
 		case xmppim.ClientPresenceElementName:
 			srv.handleClientPresence(cl, &startElem)
+			continue
+		case xmppim.ClientMessageElementName:
+			srv.handleClientMessage(cl, &startElem)
 			continue
 		default:
 			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).

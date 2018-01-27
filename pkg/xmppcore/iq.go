@@ -24,6 +24,6 @@ type ClientIQ struct {
 	Type    string       `xml:"type,attr"`           // Any of IQType*
 	From    string       `xml:"from,attr,omitempty"` //TODO: JID type
 	To      string       `xml:"to,attr,omitempty"`   //TODO: JID type
-	Payload []byte       `xml:",innerxml"`
+	Payload []byte       `xml:",innerxml"`           //TODO:FIXME: this would mess up if there's another child element like error
 	Error   *StanzaError `xml:",omitempty"`
 }

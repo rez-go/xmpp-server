@@ -7,9 +7,9 @@ import (
 )
 
 type Authenticator struct {
-	TokenEndpoint  string
-	ClientID     string
-	ClientSecret string
+	TokenEndpoint string
+	ClientID      string
+	ClientSecret  string
 }
 
 func (handler *Authenticator) HandleSASLPlainAuth(username, password []byte) (bool, error) {

@@ -86,8 +86,11 @@ mainloop:
 	srv.stopState = 1
 	srv.listener.Close()
 
-	//TODO: notify all clients that this server is going down
-	// use system-shutdown stream error condition
+	srv.clientsMutex.RLock()
+	for _, cl := range srv.clients {
+		srv.notifyClientSystemShutdown(cl)
+	}
+	defer srv.clientsMutex.RUnlock()
 
 	srv.clientsWaitGroup.Wait()
 
@@ -224,7 +227,7 @@ mainloop:
 
 		switch startElem.Name.Space + " " + startElem.Name.Local {
 		case xmppcore.StreamStreamElementName:
-			if srv.handlerClientStreamOpen(cl, &startElem) {
+			if srv.handleClientStreamOpen(cl, &startElem) {
 				continue
 			}
 			//TODO: graceful close
@@ -250,7 +253,16 @@ mainloop:
 	}
 }
 
-func (srv *Server) handlerClientStreamOpen(cl *Client, startElem *xml.StartElement) bool {
+func (srv *Server) notifyClientSystemShutdown(cl *Client) {
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Error while sending system-shutdown notification: %#v", r)
+		}
+	}()
+	cl.conn.Write([]byte(`<stream:error><system-shutdown xmlns='urn:ietf:params:xml:ns:xmpp-streams'/></stream:error></stream:stream>`))
+}
+
+func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElement) bool {
 	var toAttr, fromAttr string
 	for _, attr := range startElem.Attr {
 		switch attr.Name.Local {

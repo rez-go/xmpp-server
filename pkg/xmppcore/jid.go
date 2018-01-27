@@ -9,6 +9,11 @@ type JID struct {
 	Resource string
 }
 
+// IsEmpty returns true if all parts are empty.
+func (jid JID) IsEmpty() bool {
+	return jid.Local == "" && jid.Domain == "" && jid.Resource == ""
+}
+
 // Bare returns the "bare JID" string.
 //
 // RFC 6120  1.4:
@@ -22,6 +27,17 @@ func (jid JID) Bare() string {
 	return jid.Domain
 }
 
+// IsBare returns true if the domain is not empty and the resource is empty.
+func (jid JID) IsBare() bool {
+	if jid.Domain == "" {
+		return false
+	}
+	if jid.Resource != "" {
+		return false
+	}
+	return true
+}
+
 // Full returns the "full JID" string.
 //
 // RFC 6120  1.4
@@ -32,4 +48,12 @@ func (jid JID) Bare() string {
 // with a server).
 func (jid JID) Full() string {
 	return jid.Bare() + "/" + jid.Resource
+}
+
+// IsFull returns true if both domain and resource are not empty.
+func (jid JID) IsFull() bool {
+	if jid.Domain == "" || jid.Resource == "" {
+		return false
+	}
+	return true
 }

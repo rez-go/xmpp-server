@@ -14,3 +14,5 @@ type Client struct {
 	xmlDecoder       *xml.Decoder
 	jid              xmppcore.JID
 }
+
+type SASLPlainAuthenticatorFunc func(username, password []byte) (bool, error)

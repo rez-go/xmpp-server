@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"sandbox/gobber/cmd/gobber-server/oauth"
 	"sandbox/gobber/pkg/xmppcore"
 	"sandbox/gobber/pkg/xmppim"
 )
@@ -29,6 +30,8 @@ type Server struct {
 
 	name   string
 	domain string //TODO: support multiple
+
+	plainAuthenticatorFunc SASLPlainAuthenticatorFunc
 
 	startTime time.Time
 	stopCh    chan bool
@@ -49,12 +52,13 @@ func New(cfg *Config) (*Server, error) {
 		return nil, err
 	}
 	srv := &Server{
-		DoneCh:   make(chan bool),
-		name:     cfg.Name,
-		domain:   cfg.Domain, //TODO: normalize
-		stopCh:   make(chan bool),
-		listener: listener,
-		clients:  make(map[string]*Client),
+		DoneCh:                 make(chan bool),
+		name:                   cfg.Name,
+		domain:                 cfg.Domain, //TODO: normalize
+		plainAuthenticatorFunc: oauth.Authenticate,
+		stopCh:                 make(chan bool),
+		listener:               listener,
+		clients:                make(map[string]*Client),
 	}
 	return srv, nil
 }
@@ -333,7 +337,7 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 	}
 
 	if saslAuth.Mechanism != "PLAIN" {
-		panic("unsupported SASL mechanish")
+		panic("unsupported SASL mechanism")
 	}
 	authBytes, err := base64.StdEncoding.DecodeString(saslAuth.CharData)
 	if err != nil {
@@ -343,7 +347,11 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 	if len(authSegments) != 3 {
 		panic("there should be 3 parts here")
 	}
-	if string(authSegments[1]) == "admin" && string(authSegments[2]) == "passw0rd" {
+	authOK, err := srv.plainAuthenticatorFunc(authSegments[1], authSegments[2])
+	if err != nil {
+		panic(err)
+	}
+	if authOK {
 		authRespXML, err := xml.Marshal(&xmppcore.SASLSuccess{})
 		if err != nil {
 			panic(err)
@@ -351,6 +359,11 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 		cl.conn.Write(authRespXML)
 		cl.negotiationState = 2
 		cl.jid.Local = string(authSegments[1]) //TODO: normalize
+		if len(authSegments[0]) > 0 {
+			// If the first segment is provided, we'll have an assumed session
+			//TODO: check format, check user existence, check privilege, normalize
+			//cl.jid.Local = string(authSegments[0])
+		}
 		srv.finishClientNegotiation(cl)
 	} else {
 		authRespXML, err := xml.Marshal(&xmppcore.SASLFailure{

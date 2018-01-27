@@ -6,6 +6,7 @@ import (
 	"net/url"
 )
 
+//TODO: client_id and client_secret
 func Authenticate(username, password []byte) (bool, error) {
 	client := &http.Client{}
 

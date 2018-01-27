@@ -6,8 +6,13 @@ import (
 	"net/url"
 )
 
-//TODO: client_id and client_secret
-func Authenticate(username, password []byte) (bool, error) {
+type Authenticator struct {
+	TokenEndpoint  string
+	ClientID     string
+	ClientSecret string
+}
+
+func (handler *Authenticator) HandleSASLPlainAuth(username, password []byte) (bool, error) {
 	client := &http.Client{}
 
 	reqData := url.Values{}
@@ -16,8 +21,8 @@ func Authenticate(username, password []byte) (bool, error) {
 	reqData.Set("password", string(password))
 	reqBody := bytes.NewBuffer([]byte(reqData.Encode()))
 
-	req, err := http.NewRequest("POST", "http://localhost:8080/oauth/token", reqBody)
-	req.Header.Add("Authorization", "Basic .") //TODO: client creds
+	req, err := http.NewRequest("POST", handler.TokenEndpoint, reqBody)
+	req.SetBasicAuth(handler.ClientID, handler.ClientSecret)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)

@@ -31,7 +31,7 @@ type Server struct {
 	name   string
 	domain string //TODO: support multiple
 
-	plainAuthenticatorFunc SASLPlainAuthenticatorFunc
+	saslPlainAuthHandler SASLPlainAuthHandler
 
 	startTime time.Time
 	stopCh    chan bool
@@ -51,14 +51,18 @@ func New(cfg *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	//TODO: configuration for this
+	saslPlainAuthHandler := &oauth.Authenticator{
+		TokenEndpoint: "http://localhost:8080/oauth/token",
+	}
 	srv := &Server{
-		DoneCh:                 make(chan bool),
-		name:                   cfg.Name,
-		domain:                 cfg.Domain, //TODO: normalize
-		plainAuthenticatorFunc: oauth.Authenticate,
-		stopCh:                 make(chan bool),
-		listener:               listener,
-		clients:                make(map[string]*Client),
+		DoneCh:               make(chan bool),
+		name:                 cfg.Name,
+		domain:               cfg.Domain, //TODO: normalize
+		saslPlainAuthHandler: saslPlainAuthHandler,
+		stopCh:               make(chan bool),
+		listener:             listener,
+		clients:              make(map[string]*Client),
 	}
 	return srv, nil
 }
@@ -305,9 +309,13 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 		}
 	} else {
 		//TODO: get features from the config and mods
+		var mechanisms []string
+		if srv.saslPlainAuthHandler != nil {
+			mechanisms = append(mechanisms, "PLAIN")
+		}
 		featuresXML, err = xml.Marshal(&xmppcore.NegotiationStreamFeatures{
 			Mechanisms: &xmppcore.SASLMechanisms{
-				Mechanism: []string{"PLAIN"},
+				Mechanism: mechanisms,
 			},
 		})
 		if err != nil {
@@ -365,7 +373,7 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 	if len(authSegments) != 3 {
 		panic("there should be 3 parts here")
 	}
-	authOK, err := srv.plainAuthenticatorFunc(authSegments[1], authSegments[2])
+	authOK, err := srv.saslPlainAuthHandler.HandleSASLPlainAuth(authSegments[1], authSegments[2])
 	if err != nil {
 		panic(err)
 	}

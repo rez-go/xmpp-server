@@ -1,5 +1,38 @@
 package xmppcore
 
+import (
+	"strings"
+)
+
+// https://tools.ietf.org/html/rfc7622
+
+func ParseJID(jidString string) (JID, error) {
+	var jid JID
+	//TODO: is empty string a JID? no?
+	if jidString == "" {
+		return jid, nil
+	}
+	var bareStr string
+
+	slashIdx := strings.Index(jidString, "/")
+	if slashIdx >= 0 {
+		jid.Resource = jidString[slashIdx+1:]
+		bareStr = jidString[:slashIdx]
+	} else {
+		bareStr = jidString
+	}
+
+	atIdx := strings.Index(bareStr, "@")
+	if atIdx >= 0 {
+		jid.Domain = bareStr[atIdx+1:]
+		jid.Local = bareStr[:atIdx]
+	} else {
+		jid.Domain = bareStr
+	}
+
+	return jid, nil
+}
+
 //TODO: keep things normalized
 //TODO: an utility methods to make it easier to put
 // this into XML
@@ -47,7 +80,10 @@ func (jid JID) IsBare() bool {
 // <domainpart/resourcepart> (for a particular resource or script associated
 // with a server).
 func (jid JID) Full() string {
-	return jid.Bare() + "/" + jid.Resource
+	if jid.Resource != "" {
+		return jid.Bare() + "/" + jid.Resource
+	}
+	return jid.Bare()
 }
 
 // IsFull returns true if both domain and resource are not empty.

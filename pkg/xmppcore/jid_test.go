@@ -1,6 +1,7 @@
 package xmppcore
 
 import (
+	"encoding/xml"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,6 +59,8 @@ func TestParseJID(t *testing.T) {
 		{"example.com", JID{Domain: "example.com"}, nil},
 		{"example.com/foobar", JID{Domain: "example.com", Resource: "foobar"}, nil},
 		{"a.example.com/b@example.net", JID{Domain: "a.example.com", Resource: "b@example.net"}, nil},
+
+		{"example.com./foobar", JID{Domain: "example.com", Resource: "foobar"}, nil},
 	}
 
 	for _, data := range testData {
@@ -67,4 +70,18 @@ func TestParseJID(t *testing.T) {
 		assert.Equal(t, data.jid.Resource, jid.Resource)
 		assert.Equal(t, data.err, err)
 	}
+}
+
+func TestJIDMarshal(t *testing.T) {
+	jid := JID{Local: "juliet", Domain: "example.com", Resource: "foo"}
+	buf, err := xml.Marshal(jid)
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("<JID>juliet@example.com/foo</JID>"), buf)
+}
+
+func TestJIDUnmarshal(t *testing.T) {
+	var jid JID
+	err := xml.Unmarshal([]byte("<any>juliet@example.com/foo</any>"), &jid)
+	assert.Nil(t, err)
+	assert.Equal(t, JID{Local: "juliet", Domain: "example.com", Resource: "foo"}, jid)
 }

@@ -1,6 +1,7 @@
 package xmppcore
 
 import (
+	"encoding/xml"
 	"strings"
 )
 
@@ -29,6 +30,8 @@ func ParseJID(jidString string) (JID, error) {
 	} else {
 		jid.Domain = bareStr
 	}
+
+	jid.Domain = strings.TrimSuffix(jid.Domain, ".")
 
 	return jid, nil
 }
@@ -92,4 +95,37 @@ func (jid JID) IsFull() bool {
 		return false
 	}
 	return true
+}
+
+func (jid JID) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	if err := encoder.EncodeToken(start); err != nil {
+		return err
+	}
+	// Can we get the tag to determine bare or full?
+	if err := encoder.EncodeToken(xml.CharData(jid.Full())); err != nil {
+		return err
+	}
+	if err := encoder.EncodeToken(start.End()); err != nil {
+		return err
+	}
+	return encoder.Flush()
+}
+
+func (jid *JID) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	data := struct {
+		CharData string `xml:",chardata"`
+	}{}
+	if err := decoder.DecodeElement(&data, &start); err != nil {
+		return err
+	}
+
+	temp, err := ParseJID(data.CharData)
+	if err != nil {
+		return err
+	}
+
+	jid.Local = temp.Local
+	jid.Domain = temp.Domain
+	jid.Resource = temp.Resource
+	return nil
 }

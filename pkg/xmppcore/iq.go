@@ -21,9 +21,9 @@ const (
 type ClientIQ struct {
 	XMLName xml.Name     `xml:"jabber:client iq"`
 	ID      string       `xml:"id,attr,omitempty"`
-	Type    string       `xml:"type,attr"`           // Any of IQType*
-	From    string       `xml:"from,attr,omitempty"` //TODO: JID type
-	To      string       `xml:"to,attr,omitempty"`   //TODO: JID type
-	Payload []byte       `xml:",innerxml"`           //TODO:FIXME: this would mess up if there's another child element like error
+	Type    string       `xml:"type,attr"` // Any of IQType*
+	From    *JID         `xml:"from,attr,omitempty"`
+	To      *JID         `xml:"to,attr,omitempty"`
+	Payload []byte       `xml:",innerxml"` //TODO:FIXME: this would mess up if there's another child element like error
 	Error   *StanzaError `xml:",omitempty"`
 }

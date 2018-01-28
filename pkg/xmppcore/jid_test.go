@@ -12,8 +12,9 @@ func TestJIDEmpty(t *testing.T) {
 	assert.Equal(t, "", jid.Local)
 	assert.Equal(t, "", jid.Domain)
 	assert.Equal(t, "", jid.Resource)
-	assert.Equal(t, "", jid.Bare())
-	assert.Equal(t, "", jid.Full())
+	assert.Equal(t, "", jid.BareString())
+	assert.Equal(t, "", jid.FullString())
+	assert.Equal(t, "", jid.String())
 	assert.True(t, jid.IsEmpty())
 	assert.False(t, jid.IsBare())
 	assert.False(t, jid.IsFull())
@@ -21,8 +22,9 @@ func TestJIDEmpty(t *testing.T) {
 
 func TestJIDDomain(t *testing.T) {
 	jid := JID{Domain: "localhost"}
-	assert.Equal(t, "localhost", jid.Bare())
-	assert.Equal(t, "localhost", jid.Full())
+	assert.Equal(t, "localhost", jid.BareString())
+	assert.Equal(t, "localhost", jid.FullString())
+	assert.Equal(t, "localhost", jid.String())
 	assert.False(t, jid.IsEmpty())
 	assert.True(t, jid.IsBare())
 	assert.False(t, jid.IsFull())
@@ -30,8 +32,9 @@ func TestJIDDomain(t *testing.T) {
 
 func TestJIDBare(t *testing.T) {
 	jid := JID{Local: "user", Domain: "localhost"}
-	assert.Equal(t, "user@localhost", jid.Bare())
-	assert.Equal(t, "user@localhost", jid.Full())
+	assert.Equal(t, "user@localhost", jid.BareString())
+	assert.Equal(t, "user@localhost", jid.FullString())
+	assert.Equal(t, "user@localhost", jid.String())
 	assert.False(t, jid.IsEmpty())
 	assert.True(t, jid.IsBare())
 	assert.False(t, jid.IsFull())
@@ -39,8 +42,9 @@ func TestJIDBare(t *testing.T) {
 
 func TestJIDFull(t *testing.T) {
 	jid := JID{Local: "user", Domain: "localhost", Resource: "PC"}
-	assert.Equal(t, "user@localhost", jid.Bare())
-	assert.Equal(t, "user@localhost/PC", jid.Full())
+	assert.Equal(t, "user@localhost", jid.BareString())
+	assert.Equal(t, "user@localhost/PC", jid.FullString())
+	assert.Equal(t, "user@localhost/PC", jid.String())
 	assert.False(t, jid.IsEmpty())
 	assert.False(t, jid.IsBare())
 	assert.True(t, jid.IsFull())
@@ -53,6 +57,28 @@ func TestJIDBareCopy(t *testing.T) {
 	jid1 := jid.BareCopy()
 	assert.False(t, jid1.IsFull())
 	assert.True(t, jid1.IsBare())
+}
+
+func TestJIDBareCopyPtr(t *testing.T) {
+	jid := JID{Local: "juliet", Domain: "example.com", Resource: "foobar"}
+	assert.True(t, jid.IsFull())
+	assert.False(t, jid.IsBare())
+	jid1 := jid.BareCopyPtr()
+	assert.False(t, jid1.IsFull())
+	assert.True(t, jid1.IsBare())
+}
+
+func TestJIDEqual(t *testing.T) {
+	jid := JID{Local: "juliet", Domain: "example.com", Resource: "foobar"}
+	jid1 := JID{Local: "juliet", Domain: "example.com", Resource: "foobar"}
+	assert.True(t, jid.Equals(jid1))
+}
+
+func TestJIDNotEqual(t *testing.T) {
+	jid := JID{Local: "juliet", Domain: "example.com", Resource: "foobar"}
+	jid1 := jid
+	jid1.Resource = ""
+	assert.False(t, jid.Equals(jid1))
 }
 
 func TestParseJID(t *testing.T) {

@@ -45,18 +45,32 @@ type JID struct {
 	Resource string
 }
 
+// Equals returns true if the other JID is essentially the same.
+func (jid JID) Equals(other JID) bool {
+	return jid.Local == other.Local &&
+		jid.Domain == other.Domain &&
+		jid.Resource == other.Resource
+}
+
+// String returns the string representation of the JID.
+//
+// Use FullString() to consistently get "full JID" string representation.
+func (jid JID) String() string {
+	return jid.FullString()
+}
+
 // IsEmpty returns true if all parts are empty.
 func (jid JID) IsEmpty() bool {
 	return jid.Local == "" && jid.Domain == "" && jid.Resource == ""
 }
 
-// Bare returns the "bare JID" string.
+// BareString returns the "bare JID" string.
 //
 // RFC 6120  1.4:
 // The term "bare JID" refers to an XMPP address of the form
 // <localpart@domainpart> (for an account at a server) or of the form
 // <domainpart> (for a server).
-func (jid JID) Bare() string {
+func (jid JID) BareString() string {
 	if jid.Local != "" {
 		return jid.Local + "@" + jid.Domain
 	}
@@ -66,6 +80,12 @@ func (jid JID) Bare() string {
 // BareCopy returns a copy of the JID with resource set to empty
 func (jid JID) BareCopy() JID {
 	return JID{Local: jid.Local, Domain: jid.Domain}
+}
+
+// BareCopyStr returns a pointer to bare copy of a JID.
+func (jid JID) BareCopyPtr() *JID {
+	v := jid.BareCopy()
+	return &v
 }
 
 // IsBare returns true if the domain is not empty and the resource is empty.
@@ -87,11 +107,11 @@ func (jid JID) IsBare() bool {
 // or device associated with an account) or of the form
 // <domainpart/resourcepart> (for a particular resource or script associated
 // with a server).
-func (jid JID) Full() string {
+func (jid JID) FullString() string {
 	if jid.Resource != "" {
-		return jid.Bare() + "/" + jid.Resource
+		return jid.BareString() + "/" + jid.Resource
 	}
-	return jid.Bare()
+	return jid.BareString()
 }
 
 // IsFull returns true if both domain and resource are not empty.
@@ -107,7 +127,7 @@ func (jid JID) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
 		return err
 	}
 	// Can we get the tag to determine bare or full?
-	if err := encoder.EncodeToken(xml.CharData(jid.Full())); err != nil {
+	if err := encoder.EncodeToken(xml.CharData(jid.FullString())); err != nil {
 		return err
 	}
 	if err := encoder.EncodeToken(start.End()); err != nil {
@@ -132,7 +152,7 @@ func (jid *JID) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error
 }
 
 func (jid JID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
-	return xml.Attr{Name: name, Value: jid.Full()}, nil
+	return xml.Attr{Name: name, Value: jid.FullString()}, nil
 }
 
 func (jid *JID) UnmarshalXMLAttr(attr xml.Attr) error {

@@ -31,5 +31,5 @@ type BindResource struct {
 
 type BindJID struct {
 	XMLName  xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind jid"`
-	CharData string   `xml:",chardata"` //TODO: should be JID type
+	CharData string   `xml:",chardata"` //TODO: JID type
 }

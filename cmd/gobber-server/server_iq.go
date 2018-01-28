@@ -77,8 +77,8 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
 			ID:      iq.ID,
 			Type:    xmppcore.IQTypeError,
-			From:    srv.domain,
-			To:      cl.jid.Full(),
+			From:    &xmppcore.JID{Domain: srv.domain},
+			To:      &cl.jid,
 			Payload: errorXML,
 		})
 		if err != nil {
@@ -123,8 +123,8 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
 			ID:   iq.ID,
 			Type: xmppcore.IQTypeResult,
-			From: cl.jid.Bare(),
-			To:   cl.jid.Full(),
+			From: cl.jid.BareCopyPtr(),
+			To:   &cl.jid,
 		})
 		if err != nil {
 			panic(err)
@@ -136,8 +136,8 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
 			ID:   iq.ID,
 			Type: xmppcore.IQTypeResult,
-			From: srv.domain,
-			To:   cl.jid.Full(),
+			From: &xmppcore.JID{Domain: srv.domain},
+			To:   &cl.jid,
 		})
 		if err != nil {
 			panic(err)
@@ -160,8 +160,8 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 			ID:      iq.ID,
 			Type:    xmppcore.IQTypeError,
-			From:    srv.domain,
-			To:      cl.jid.Full(),
+			From:    &xmppcore.JID{Domain: srv.domain},
+			To:      &cl.jid,
 			Payload: errorXML,
 		})
 		if err != nil {
@@ -193,7 +193,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 	}
 
 	// RFC 6120  4.9.3.9
-	if iq.From != "" && iq.From != cl.jid.Full() {
+	if iq.From != nil && !iq.From.Equals(cl.jid) {
 		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
 			Warnf("Invalid from: %s", iq.From)
 		errorXML, err := xml.Marshal(xmppcore.StreamError{
@@ -207,11 +207,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		return
 	}
 	//TODO: check RFC 6120 8.1.1.1.
-	toJID, err := xmppcore.ParseJID(iq.To)
-	if err != nil {
-		panic(err)
-	}
-	if !toJID.IsEmpty() && toJID.Domain != srv.domain {
+	if iq.To != nil && iq.To.Domain != srv.domain {
 		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full(), "stanza": iq.ID}).
 			Warnf("Invalid to: %s", iq.To)
 		errorXML, err := xml.Marshal(xmppcore.StanzaError{
@@ -224,8 +220,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 			ID:      iq.ID,
 			Type:    xmppcore.IQTypeError,
-			From:    srv.domain,
-			To:      cl.jid.Full(),
+			From:    &xmppcore.JID{Domain: srv.domain},
+			To:      &cl.jid,
 			Payload: errorXML,
 		})
 		if err != nil {
@@ -260,8 +256,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(&xmppcore.ClientIQ{
 			ID:      iq.ID,
 			Type:    xmppcore.IQTypeError,
-			From:    srv.domain,
-			To:      cl.jid.Full(),
+			From:    &xmppcore.JID{Domain: srv.domain},
+			To:      &cl.jid,
 			Payload: errorXML,
 		})
 		if err != nil {
@@ -281,7 +277,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 	switch element.(type) {
 	case *xmppdisco.InfoIQGet:
 		//TODO: check the target resource etc.
-		if toJID.Full() == srv.domain {
+		if iq.To != nil && iq.To.Full() == srv.domain {
 			queryResultXML, err := xml.Marshal(xmppdisco.InfoIQResult{
 				Identity: []xmppdisco.Identity{
 					{Category: xmppdisco.IdentityCategoryServer, Type: "im", Name: "gobber"},
@@ -296,8 +292,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 				ID:      iq.ID,
 				Type:    xmppcore.IQTypeResult,
-				From:    srv.domain, //TODO: server's JID
-				To:      cl.jid.Full(),
+				From:    &xmppcore.JID{Domain: srv.domain},
+				To:      &cl.jid,
 				Payload: queryResultXML,
 			})
 			if err != nil {
@@ -310,7 +306,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 	case *xmppdisco.ItemsIQGet:
 		//TODO: check the target resource etc.
 		//TODO: conference, pubsub, etc.
-		if toJID.Full() == srv.domain {
+		if iq.To != nil && iq.To.Full() == srv.domain {
 			queryResultXML, err := xml.Marshal(xmppdisco.ItemsIQResult{})
 			if err != nil {
 				panic(err)
@@ -318,8 +314,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 				ID:      iq.ID,
 				Type:    xmppcore.IQTypeResult,
-				From:    srv.domain,
-				To:      cl.jid.Full(),
+				From:    &xmppcore.JID{Domain: srv.domain},
+				To:      &cl.jid,
 				Payload: queryResultXML,
 			})
 			if err != nil {
@@ -338,8 +334,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 			ID:      iq.ID,
 			Type:    xmppcore.IQTypeResult,
-			From:    srv.domain,
-			To:      cl.jid.Full(),
+			From:    &xmppcore.JID{Domain: srv.domain},
+			To:      &cl.jid,
 			Payload: resultPayloadXML,
 		})
 		if err != nil {
@@ -348,7 +344,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		cl.conn.Write(resultXML)
 		return
 	case *xmppim.RosterIQGet:
-		if !toJID.IsEmpty() {
+		if iq.To != nil && !iq.To.IsEmpty() {
 			panic("TODO: handle this")
 		}
 		resultPayloadXML, err := xml.Marshal(xmppim.RosterIQResult{})
@@ -358,8 +354,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 			ID:      iq.ID,
 			Type:    xmppcore.IQTypeResult,
-			From:    srv.domain,
-			To:      cl.jid.Full(),
+			From:    &xmppcore.JID{Domain: srv.domain},
+			To:      &cl.jid,
 			Payload: resultPayloadXML,
 		})
 		if err != nil {
@@ -372,8 +368,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 			ID:   iq.ID,
 			Type: xmppcore.IQTypeResult,
-			From: srv.domain,
-			To:   cl.jid.Full(),
+			From: &xmppcore.JID{Domain: srv.domain},
+			To:   &cl.jid,
 		})
 		if err != nil {
 			panic(err)
@@ -396,8 +392,8 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		resultXML, err := xml.Marshal(xmppcore.ClientIQ{
 			ID:      iq.ID,
 			Type:    xmppcore.IQTypeError,
-			From:    srv.domain,
-			To:      cl.jid.Full(),
+			From:    &xmppcore.JID{Domain: srv.domain},
+			To:      &cl.jid,
 			Payload: errorXML,
 		})
 		if err != nil {

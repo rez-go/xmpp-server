@@ -7,6 +7,17 @@ import (
 	"sandbox/gobber/pkg/xmppim"
 )
 
+//TODO: move to xmppim
+
+func (srv *Server) handleClientPresence(cl *Client, startElem *xml.StartElement) {
+	var presence xmppim.ClientPresence
+	err := cl.xmlDecoder.DecodeElement(&presence, startElem)
+	if err != nil {
+		panic(err)
+	}
+	//TODO: broadcast to those subscribed
+}
+
 func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) {
 	var incoming xmppim.ClientMessage
 	//NOTE: decoding the whole element might not the best practice.

@@ -258,7 +258,7 @@ mainloop:
 func (srv *Server) notifyClientSystemShutdown(cl *Client) {
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Error while sending system-shutdown notification: %#v", r)
+			logrus.Errorf("Got panic while sending system-shutdown notification: %#v", r)
 		}
 	}()
 	cl.conn.Write([]byte(`<stream:error><system-shutdown xmlns='urn:ietf:params:xml:ns:xmpp-streams'/></stream:error></stream:stream>`))
@@ -346,16 +346,6 @@ func (srv *Server) finishClientNegotiation(cl *Client) {
 	cl.streamID = sid
 	srv.clients[cl.streamID] = cl
 	srv.clientsMutex.Unlock()
-}
-
-//TODO: move to xmppim
-func (srv *Server) handleClientPresence(cl *Client, startElem *xml.StartElement) {
-	var presence xmppim.ClientPresence
-	err := cl.xmlDecoder.DecodeElement(&presence, startElem)
-	if err != nil {
-		panic(err)
-	}
-	//TODO: broadcast to those subscribed
 }
 
 func (srv *Server) generateSessionID() (string, error) {

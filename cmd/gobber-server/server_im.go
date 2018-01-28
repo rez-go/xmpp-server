@@ -48,7 +48,7 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 			outgoing := xmppim.ClientMessage{
 				ID:      incoming.ID,
 				To:      rcl.jid.Full(),
-				From:    cl.jid.Bare(), // optional, bare or full
+				From:    cl.jid.Bare(), //TODO: optional, bare or full
 				Type:    incoming.Type,
 				Payload: incoming.Payload,
 			}

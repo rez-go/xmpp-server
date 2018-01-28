@@ -63,6 +63,11 @@ func (jid JID) Bare() string {
 	return jid.Domain
 }
 
+// BareCopy returns a copy of the JID with resource set to empty
+func (jid JID) BareCopy() JID {
+	return JID{Local: jid.Local, Domain: jid.Domain}
+}
+
 // IsBare returns true if the domain is not empty and the resource is empty.
 func (jid JID) IsBare() bool {
 	if jid.Domain == "" {
@@ -118,14 +123,26 @@ func (jid *JID) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error
 	if err := decoder.DecodeElement(&data, &start); err != nil {
 		return err
 	}
-
-	temp, err := ParseJID(data.CharData)
+	jid1, err := ParseJID(data.CharData)
 	if err != nil {
 		return err
 	}
+	*jid = jid1
+	return nil
+}
 
-	jid.Local = temp.Local
-	jid.Domain = temp.Domain
-	jid.Resource = temp.Resource
+func (jid JID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return xml.Attr{Name: name, Value: jid.Full()}, nil
+}
+
+func (jid *JID) UnmarshalXMLAttr(attr xml.Attr) error {
+	if attr.Value == "" {
+		return nil
+	}
+	jid1, err := ParseJID(attr.Value)
+	if err != nil {
+		return err
+	}
+	*jid = jid1
 	return nil
 }

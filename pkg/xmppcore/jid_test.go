@@ -46,6 +46,15 @@ func TestJIDFull(t *testing.T) {
 	assert.True(t, jid.IsFull())
 }
 
+func TestJIDBareCopy(t *testing.T) {
+	jid := JID{Local: "juliet", Domain: "example.com", Resource: "foobar"}
+	assert.True(t, jid.IsFull())
+	assert.False(t, jid.IsBare())
+	jid1 := jid.BareCopy()
+	assert.False(t, jid1.IsFull())
+	assert.True(t, jid1.IsBare())
+}
+
 func TestParseJID(t *testing.T) {
 	//TODO: take vectors from RFC 7622 section 3.5
 	testData := []struct {
@@ -84,4 +93,30 @@ func TestJIDUnmarshal(t *testing.T) {
 	err := xml.Unmarshal([]byte("<any>juliet@example.com/foo</any>"), &jid)
 	assert.Nil(t, err)
 	assert.Equal(t, JID{Local: "juliet", Domain: "example.com", Resource: "foo"}, jid)
+}
+
+type testJIDAttr struct {
+	XMLName xml.Name `xml:"test"`
+	JID     JID      `xml:"jid,attr"`
+}
+
+func TestJIDMarshalAttr(t *testing.T) {
+	v := testJIDAttr{JID: JID{Local: "juliet", Domain: "example.com", Resource: "foo"}}
+	buf, err := xml.Marshal(v)
+	assert.Nil(t, err)
+	assert.Equal(t, []byte(`<test jid="juliet@example.com/foo"></test>`), buf)
+}
+
+func TestJIDUnmarshalAttr(t *testing.T) {
+	var v testJIDAttr
+	err := xml.Unmarshal([]byte("<test jid='juliet@example.com/foo' />"), &v)
+	assert.Nil(t, err)
+	assert.Equal(t, JID{Local: "juliet", Domain: "example.com", Resource: "foo"}, v.JID)
+}
+
+func TestJIDUnmarshalAttrEmptyValue(t *testing.T) {
+	var jid JID
+	err := jid.UnmarshalXMLAttr(xml.Attr{Name: xml.Name{Local: "jid"}, Value: ""})
+	assert.Nil(t, err)
+	assert.True(t, jid.IsEmpty())
 }

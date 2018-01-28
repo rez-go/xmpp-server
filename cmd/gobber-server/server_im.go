@@ -47,8 +47,8 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 		if rcl.jid.Local == toJID.Local {
 			outgoing := xmppim.ClientMessage{
 				ID:      incoming.ID,
-				To:      rcl.jid.Full(),
-				From:    cl.jid.Bare(), //TODO: optional, bare or full
+				To:      rcl.jid.FullString(),
+				From:    cl.jid.BareString(), //TODO: optional, bare or full
 				Type:    incoming.Type,
 				Payload: incoming.Payload,
 			}

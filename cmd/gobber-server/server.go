@@ -6,7 +6,6 @@ import (
 	"io"
 	"math/big"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,12 +21,15 @@ import (
 
 //TODO: use locking to ensure that there will be one write into
 // the connection.
+//NOTE: currently, we don't any plan for having support for serving
+// multiple domain as it increases the complexity of the code. we would
+// suggest to look at other solutions.
 
 type Server struct {
 	DoneCh chan bool
 
-	name   string
-	domain string //TODO: support multiple
+	name string
+	jid  xmppcore.JID
 
 	saslPlainAuthHandler SASLPlainAuthHandler
 
@@ -56,7 +58,7 @@ func New(cfg *Config) (*Server, error) {
 	srv := &Server{
 		DoneCh:               make(chan bool),
 		name:                 cfg.Name,
-		domain:               cfg.Domain, //TODO: normalize
+		jid:                  xmppcore.JID{Domain: cfg.Domain}, //TODO: normalize
 		saslPlainAuthHandler: saslPlainAuthHandler,
 		stopCh:               make(chan bool),
 		listener:             listener,
@@ -148,7 +150,7 @@ func (srv *Server) newClient(conn net.Conn) (*Client, error) {
 		conn:       conn,
 		streamID:   sid,
 		xmlDecoder: xml.NewDecoder(conn),
-		jid:        xmppcore.JID{Domain: srv.domain},
+		jid:        xmppcore.JID{Domain: srv.jid.Domain},
 	}
 	srv.clientsMutex.Lock()
 	srv.clients[cl.streamID] = cl
@@ -170,7 +172,7 @@ func (srv *Server) serveClient(cl *Client) {
 
 		srv.clientsWaitGroup.Done()
 
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Info("Client disconnected")
 	}()
 
@@ -180,7 +182,7 @@ mainloop:
 		if err != nil {
 			// Clean disconnection
 			if err == io.EOF {
-				logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid.Full()}).
+				logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 					Info("Client connection closed")
 				break mainloop
 			}
@@ -275,7 +277,16 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 		}
 	}
 
-	if toAttr != srv.domain {
+	toJID, err := xmppcore.ParseJID(toAttr)
+	if err != nil {
+		panic("TODO")
+	}
+	fromJID, err := xmppcore.ParseJID(fromAttr)
+	if err != nil {
+		panic("TODO")
+	}
+
+	if !toJID.Equals(srv.jid) {
 		resultXML, err := xml.Marshal(&xmppcore.StreamError{
 			Condition: xmppcore.StreamErrorConditionHostUnknown,
 		})
@@ -285,20 +296,17 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 		cl.conn.Write(resultXML)
 		return false
 	}
-	if fromAttr != "" {
-		if !strings.HasSuffix(fromAttr, srv.domain) {
-			resultXML, err := xml.Marshal(&xmppcore.StreamError{
-				Condition: xmppcore.StreamErrorConditionInvalidFrom,
-			})
-			if err != nil {
-				panic(err)
-			}
-			cl.conn.Write(resultXML)
-			return false
+	if !fromJID.IsEmpty() && fromJID.Domain != srv.jid.Domain {
+		resultXML, err := xml.Marshal(&xmppcore.StreamError{
+			Condition: xmppcore.StreamErrorConditionInvalidFrom,
+		})
+		if err != nil {
+			panic(err)
 		}
+		cl.conn.Write(resultXML)
+		return false
 	}
 
-	var err error
 	var featuresXML []byte
 	if cl.negotiationState == 2 {
 		featuresXML, err = xml.Marshal(&xmppcore.StreamFeatures{})
@@ -327,7 +335,7 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 		" id='%s' xml:lang='en'"+
 		" xmlns:stream='%s' version='1.0'>\n"+
 		string(featuresXML)+"\n",
-		xmlEscape(srv.domain), xmppcore.JabberClientNS,
+		xmlEscape(srv.jid.FullString()), xmppcore.JabberClientNS,
 		xmlEscape(cl.streamID), xmppcore.JabberStreamsNS)
 	if err != nil {
 		panic(err)

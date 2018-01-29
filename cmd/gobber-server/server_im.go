@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/xml"
 
+	"github.com/sirupsen/logrus"
+
 	"sandbox/gobber/pkg/xmppim"
 )
 
@@ -19,7 +21,7 @@ func (srv *Server) handleClientPresence(cl *Client, startElem *xml.StartElement)
 
 func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) {
 	var incoming xmppim.ClientMessage
-	//NOTE: decoding the whole element might not the best practice.
+	//NOTE:SEC: decoding the whole element might not the best practice.
 	// generally we want to stream the child elements.
 	err := cl.xmlDecoder.DecodeElement(&incoming, startElem)
 	if err != nil {
@@ -34,7 +36,7 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 	// We should parse the child elements. For now, let's just
 	// relay them as-is.
 
-	//TODO: this is inefficient
+	//TODO: this is inefficient. probably we want channels here.
 	srv.clientsMutex.RLock()
 	defer srv.clientsMutex.RUnlock()
 
@@ -43,13 +45,15 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 			outgoing := xmppim.ClientMessage{
 				ID:      incoming.ID,
 				To:      &rcl.jid,
-				From:    cl.jid.BareCopyPtr(), //TODO: optional, bare or full
+				From:    cl.jid.BareCopyPtr(), //TODO: optional, bare or full (check the spec)
 				Type:    incoming.Type,
 				Payload: incoming.Payload,
 			}
 			msgXML, err := xml.Marshal(&outgoing)
 			if err != nil {
-				continue //TODO: deal this
+				logrus.WithFields(logrus.Fields{"stream": rcl.streamID, "jid": rcl.jid, "stanza": incoming.ID}).
+					Warn("Unable to send a message into a recipient")
+				continue
 			}
 			rcl.conn.Write(msgXML)
 		}

@@ -8,11 +8,12 @@ import (
 )
 
 type Client struct {
-	conn             net.Conn
-	negotiationState int
-	streamID         string
-	xmlDecoder       *xml.Decoder
-	jid              xmppcore.JID
+	conn          net.Conn
+	streamID      string
+	xmlDecoder    *xml.Decoder
+	jid           xmppcore.JID
+	authenticated bool
+	disconnecting bool
 }
 
 type SASLPlainAuthHandler interface {

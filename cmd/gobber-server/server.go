@@ -18,11 +18,12 @@ import (
 	"sandbox/gobber/pkg/xmppim"
 )
 
-//TODO: use locking to ensure that there will be one write into
-// the connection.
 //NOTE: currently, we don't any plan for having support for serving
 // multiple domain as it increases the complexity of the code. we would
 // suggest to look at other solutions.
+//NOTE: it seems that we don't need to acquire lock to net.Conn to
+// prevent multiple goroutines from messing up the network stream.
+// https://stackoverflow.com/questions/38565654/golang-net-conn-write-in-parallel
 
 type Server struct {
 	DoneCh chan bool
@@ -93,7 +94,7 @@ mainloop:
 	for _, cl := range srv.clients {
 		srv.notifyClientSystemShutdown(cl)
 	}
-	defer srv.clientsMutex.RUnlock()
+	srv.clientsMutex.RUnlock()
 
 	srv.clientsWaitGroup.Wait()
 
@@ -158,21 +159,20 @@ func (srv *Server) newClient(conn net.Conn) (*Client, error) {
 }
 
 func (srv *Server) serveClient(cl *Client) {
-	//TODO: on panic, simply close the connection.
 	defer func() {
 		if cl.conn != nil {
 			cl.conn.Close()
 			cl.conn = nil
 		}
 
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+			Info("Client disconnected")
+
 		srv.clientsMutex.Lock()
 		delete(srv.clients, cl.streamID)
 		srv.clientsMutex.Unlock()
 
 		srv.clientsWaitGroup.Done()
-
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
-			Info("Client disconnected")
 	}()
 
 mainloop:
@@ -187,6 +187,9 @@ mainloop:
 			}
 			// Un-clean disconnection (the connection is closed while
 			// the stream is still open)
+			//NOTE: this could be a expected case for every authenticated
+			// stream. for each authenticated stream, there will be two
+			// streams and we will only close the 'inner' stream.
 			if xmlErr, _ := err.(*xml.SyntaxError); xmlErr != nil {
 				if xmlErr.Line == 1 && xmlErr.Msg == "unexpected EOF" {
 					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
@@ -204,17 +207,21 @@ mainloop:
 			break mainloop
 		}
 
-		//TODO: check for EndElement which closes the stream
 		//TODO: check for restricted-xml
 		switch token.(type) {
 		case xml.StartElement:
-			// Pass. Processed below.
+			// Processed after the switch
 		case xml.EndElement:
 			endElem := token.(xml.EndElement)
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
-				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
-					Info("Client closed the stream. Disconnecting client....")
-				cl.conn.Write([]byte("</stream:stream>"))
+				if !cl.disconnecting {
+					cl.disconnecting = true
+					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+						Info("Client closed the stream. Disconnecting client....")
+					//TODO: should we send a reply or simply close the connection?
+					cl.conn.Write([]byte("</stream:stream>"))
+					continue
+				}
 				cl.conn.Close()
 				break mainloop
 			}
@@ -235,6 +242,11 @@ mainloop:
 			continue
 		}
 
+		if cl.disconnecting {
+			cl.xmlDecoder.Skip()
+			continue
+		}
+
 		startElem := token.(xml.StartElement)
 
 		switch startElem.Name.Space + " " + startElem.Name.Local {
@@ -242,8 +254,9 @@ mainloop:
 			if srv.handleClientStreamOpen(cl, &startElem) {
 				continue
 			}
-			//TODO: graceful close
+			cl.disconnecting = true
 			cl.conn.Write([]byte("</stream:stream>"))
+			//TODO: graceful close (wait until we got end stream from client)
 			break mainloop
 		case xmppcore.SASLAuthElementName:
 			srv.handleClientSASLAuth(cl, &startElem)
@@ -271,7 +284,9 @@ func (srv *Server) notifyClientSystemShutdown(cl *Client) {
 			logrus.Errorf("Got panic while sending system-shutdown notification: %#v", r)
 		}
 	}()
-	cl.conn.Write([]byte(`<stream:error><system-shutdown xmlns='urn:ietf:params:xml:ns:xmpp-streams'/></stream:error></stream:stream>`))
+	cl.disconnecting = true
+	cl.conn.Write([]byte(`<stream:error><system-shutdown xmlns='urn:ietf:params:xml:ns:xmpp-streams'/></stream:error>\n` +
+		`</stream:stream>`))
 }
 
 func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElement) bool {
@@ -279,9 +294,9 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 	for _, attr := range startElem.Attr {
 		switch attr.Name.Local {
 		case "to":
-			toAttr = attr.Value //TODO: parse JID
+			toAttr = attr.Value
 		case "from":
-			fromAttr = attr.Value //TODO: parse JID
+			fromAttr = attr.Value
 		}
 	}
 
@@ -316,8 +331,8 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 	}
 
 	var featuresXML []byte
-	if cl.negotiationState == 2 {
-		featuresXML, err = xml.Marshal(&xmppcore.StreamFeatures{})
+	if cl.authenticated {
+		featuresXML, err = xml.Marshal(&xmppcore.AuthenticatedStreamFeatures{})
 		if err != nil {
 			panic(err)
 		}
@@ -337,7 +352,7 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 		}
 	}
 
-	//TODO: include 'to' if provided
+	//TODO: include 'to' if 'from' was provided
 	_, err = fmt.Fprintf(cl.conn, xml.Header+
 		"<stream:stream from='%s' xmlns='%s'"+
 		" id='%s' xml:lang='en'"+

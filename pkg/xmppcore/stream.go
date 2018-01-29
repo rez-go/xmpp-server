@@ -18,8 +18,8 @@ type NegotiationStreamFeatures struct {
 	//TODO: allow mods to provide more features
 }
 
-// StreamFeatures is used on the second stream
-type StreamFeatures struct {
+// AuthenticatedStreamFeatures is used on the second stream
+type AuthenticatedStreamFeatures struct {
 	XMLName xml.Name `xml:"stream:features"`
 	Bind    BindBind `xml:"bind"`
 	//TODO: get more features from the mods

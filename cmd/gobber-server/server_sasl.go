@@ -37,7 +37,7 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 			panic(err)
 		}
 		cl.conn.Write(authRespXML)
-		cl.negotiationState = 2
+		cl.authenticated = true
 		cl.jid.Local = string(authSegments[1]) //TODO: normalize
 		if len(authSegments[0]) > 0 {
 			// If the first segment is provided, we'll have an assumed session

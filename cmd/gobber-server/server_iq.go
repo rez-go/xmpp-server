@@ -16,7 +16,7 @@ import (
 
 func (srv *Server) handleClientIQ(cl *Client, startElem *xml.StartElement) {
 	var iq xmppcore.ClientIQ
-	//NOTE: decoding the whole element might not the best practice.
+	//NOTE:SEC: decoding the whole element might not the best practice.
 	// generally we want to stream the child elements.
 	err := cl.xmlDecoder.DecodeElement(&iq, startElem)
 	if err != nil {
@@ -96,8 +96,12 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 
 	switch payload := element.(type) {
 	case *xmppcore.BindIQSet:
-		//TODO: if not provided, generate. also, if configured, override.
-		cl.jid.Resource = payload.Resource //TODO: normalize
+		//TODO: if configured, override.
+		if payload.Resource != "" {
+			cl.jid.Resource = payload.Resource //TODO: normalize
+		} else {
+			cl.jid.Resource = cl.streamID
+		}
 		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Info("Bound!")
 

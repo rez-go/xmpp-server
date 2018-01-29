@@ -5,9 +5,11 @@ import (
 	"strings"
 )
 
+// Related specs:
 // https://tools.ietf.org/html/rfc7622
 // https://xmpp.org/extensions/xep-0106.html
 
+// ParseJID parses a string.
 func ParseJID(jidString string) (JID, error) {
 	var jid JID
 	//TODO: is empty string a JID? no?
@@ -37,6 +39,8 @@ func ParseJID(jidString string) (JID, error) {
 	return jid, nil
 }
 
+// JID represents a JID.
+//
 //TODO: keep things normalized
 //TODO: an utility methods to make it easier to put
 // this into XML
@@ -83,7 +87,7 @@ func (jid JID) BareCopy() JID {
 	return JID{Local: jid.Local, Domain: jid.Domain}
 }
 
-// BareCopyStr returns a pointer to bare copy of a JID.
+// BareCopyPtr returns a pointer to bare copy of a JID.
 func (jid JID) BareCopyPtr() *JID {
 	v := jid.BareCopy()
 	return &v
@@ -100,7 +104,7 @@ func (jid JID) IsBare() bool {
 	return true
 }
 
-// Full returns the "full JID" string.
+// FullString returns the "full JID" string.
 //
 // RFC 6120  1.4
 // The term "full JID" refers to an XMPP address of the form
@@ -123,6 +127,7 @@ func (jid JID) IsFull() bool {
 	return true
 }
 
+// MarshalXML satisfies encoding/xml.Marshaler interface
 func (jid JID) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
 	if err := encoder.EncodeToken(start); err != nil {
 		return err
@@ -137,6 +142,7 @@ func (jid JID) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
 	return encoder.Flush()
 }
 
+// UnmarshalXML satisfies encoding/xml.Unmarshaler interface
 func (jid *JID) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
 	data := struct {
 		CharData string `xml:",chardata"`
@@ -152,10 +158,12 @@ func (jid *JID) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error
 	return nil
 }
 
+// MarshalXMLAttr satisfies encoding/xml.MarshalerAttr interface
 func (jid JID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 	return xml.Attr{Name: name, Value: jid.FullString()}, nil
 }
 
+// UnmarshalXMLAttr satisfies encoding/xml.UnmarshalerAttr interface
 func (jid *JID) UnmarshalXMLAttr(attr xml.Attr) error {
 	if attr.Value == "" {
 		return nil

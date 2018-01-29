@@ -208,6 +208,8 @@ mainloop:
 		//TODO: check for EndElement which closes the stream
 		//TODO: check for restricted-xml
 		switch token.(type) {
+		case xml.StartElement:
+			// Pass. Processed below.
 		case xml.EndElement:
 			endElem := token.(xml.EndElement)
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
@@ -220,8 +222,15 @@ mainloop:
 			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
 				Errorf("Unexpected EndElement: %#v", endElem)
 			panic(endElem)
-		case xml.StartElement:
-			// Pass
+		case xml.ProcInst:
+			procInst := token.(xml.ProcInst)
+			if procInst.Target != "xml" {
+				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+					Errorf("Unexpected processing instruction: %#v", procInst)
+				continue
+			}
+			// Check XML version, encoding?
+			continue
 		default:
 			logrus.Warnf("%#v", token)
 			continue

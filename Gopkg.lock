@@ -14,12 +14,6 @@
   version = "0.2"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/itchyny/base58-go"
-  packages = ["."]
-  revision = "4b24a7dfa1bfba3724ffb3598b1c6ded1cff087f"
-
-[[projects]]
   name = "github.com/pkg/errors"
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
@@ -47,7 +41,7 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "0efb9460aaf800c6376acf625be2853bceac2e06"
+  revision = "1875d0a70c90e57f11972aefd42276df65e895b9"
 
 [[projects]]
   branch = "master"
@@ -61,6 +55,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0bb76573cffe82aa5347713cb63fe86319f292d28cc6ba3064fc586f9f53423f"
+  inputs-digest = "136261fe5d9722df18a3e7a24b8879866fbb294ddf1c4f9b6bea56825068c75c"
   solver-name = "gps-cdcl"
   solver-version = 1

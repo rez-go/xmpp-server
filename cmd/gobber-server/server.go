@@ -1,16 +1,15 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
-	"math/big"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/itchyny/base58-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -366,15 +365,10 @@ func (srv *Server) finishClientNegotiation(cl *Client) {
 }
 
 func (srv *Server) generateSessionID() (string, error) {
-	//NOTE: this whole function is highly inefficient.
 	sid, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
-	i := new(big.Int).SetBytes(sid[:])
-	sidEncd, err := base58.BitcoinEncoding.Encode([]byte(i.String()))
-	if err != nil {
-		return "", err
-	}
+	sidEncd := base64.RawURLEncoding.EncodeToString(sid[:])
 	return string(sidEncd), nil
 }

@@ -16,20 +16,10 @@ type BindBind struct {
 
 type BindIQSet struct {
 	XMLName  xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind bind"`
-	Resource BindResource
+	Resource string   `xml:"resource"`
 }
 
 type BindIQResult struct {
 	XMLName xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind bind"`
-	JID     BindJID
-}
-
-type BindResource struct {
-	XMLName  xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind resource"`
-	CharData string   `xml:",chardata"`
-}
-
-type BindJID struct {
-	XMLName  xml.Name `xml:"urn:ietf:params:xml:ns:xmpp-bind jid"`
-	CharData string   `xml:",chardata"` //TODO: JID type
+	JID     *JID     `xml:"jid"`
 }

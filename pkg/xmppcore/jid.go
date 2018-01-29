@@ -6,6 +6,7 @@ import (
 )
 
 // https://tools.ietf.org/html/rfc7622
+// https://xmpp.org/extensions/xep-0106.html
 
 func ParseJID(jidString string) (JID, error) {
 	var jid JID

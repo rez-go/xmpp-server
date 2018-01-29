@@ -97,12 +97,12 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 	switch payload := element.(type) {
 	case *xmppcore.BindIQSet:
 		//TODO: if not provided, generate. also, if configured, override.
-		cl.jid.Resource = payload.Resource.CharData //TODO: normalize
+		cl.jid.Resource = payload.Resource //TODO: normalize
 		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Info("Bound!")
 
 		resultPayloadXML, err := xml.Marshal(&xmppcore.BindIQResult{
-			JID: xmppcore.BindJID{CharData: cl.jid.FullString()},
+			JID: &cl.jid,
 		})
 		if err != nil {
 			panic(err)

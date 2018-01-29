@@ -11,7 +11,6 @@ import (
 	"sandbox/gobber/pkg/xmppdisco"
 	"sandbox/gobber/pkg/xmppim"
 	"sandbox/gobber/pkg/xmppping"
-	"sandbox/gobber/pkg/xmppprivate"
 	"sandbox/gobber/pkg/xmppvcard"
 )
 

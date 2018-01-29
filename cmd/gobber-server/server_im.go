@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/xml"
 
-	"sandbox/gobber/pkg/xmppcore"
 	"sandbox/gobber/pkg/xmppim"
 )
 
@@ -27,11 +26,7 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 		panic(err)
 	}
 
-	toJID, err := xmppcore.ParseJID(incoming.To)
-	if err != nil {
-		panic(err)
-	}
-	if toJID.IsEmpty() {
+	if incoming.To == nil || incoming.To.IsEmpty() {
 		//TODO: skip the whole stanza
 		return //TODO: tell the client
 	}
@@ -44,11 +39,11 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 	defer srv.clientsMutex.RUnlock()
 
 	for _, rcl := range srv.clients {
-		if rcl.jid.Local == toJID.Local {
+		if rcl.jid.Local == incoming.To.Local {
 			outgoing := xmppim.ClientMessage{
 				ID:      incoming.ID,
-				To:      rcl.jid.FullString(),
-				From:    cl.jid.BareString(), //TODO: optional, bare or full
+				To:      &rcl.jid,
+				From:    cl.jid.BareCopyPtr(), //TODO: optional, bare or full
 				Type:    incoming.Type,
 				Payload: incoming.Payload,
 			}

@@ -66,7 +66,9 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		element = &xmppcore.SessionIQSet{}
 	case xmppvcard.ElementName:
 		element = &xmppvcard.IQSet{}
-	case xmppprivate.ElementName:
+	default:
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
+			Warnf("Unrecognized IQ Set: %s", startElem.Name)
 		errorXML, err := xml.Marshal(&xmppcore.StanzaError{
 			Type:      xmppcore.StanzaErrorTypeCancel,
 			Condition: xmppcore.StanzaErrorConditionFeatureNotImplemented,
@@ -86,8 +88,6 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		}
 		cl.conn.Write(resultXML)
 		return
-	default:
-		panic(startElem.Name.Space + " " + startElem.Name.Local)
 	}
 
 	err = decoder.DecodeElement(element, &startElem)
@@ -245,7 +245,9 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		element = &xmppim.RosterIQGet{}
 	case xmppping.ElementName:
 		element = &xmppping.IQGet{}
-	case xmppprivate.ElementName:
+	default:
+		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
+			Warnf("Unrecognized IQ Get: %s", startElem.Name)
 		errorXML, err := xml.Marshal(&xmppcore.StanzaError{
 			Type:      xmppcore.StanzaErrorTypeCancel,
 			Condition: xmppcore.StanzaErrorConditionFeatureNotImplemented,
@@ -265,8 +267,6 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		}
 		cl.conn.Write(resultXML)
 		return
-	default:
-		panic(startElem.Name.Space + " " + startElem.Name.Local)
 	}
 
 	err = decoder.DecodeElement(element, &startElem)

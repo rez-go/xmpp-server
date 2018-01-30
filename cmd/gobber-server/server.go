@@ -149,7 +149,7 @@ func (srv *Server) newClient(conn net.Conn) (*Client, error) {
 	cl := &Client{
 		conn:       conn,
 		streamID:   sid,
-		xmlDecoder: xml.NewDecoder(conn),
+		xmlDecoder: xml.NewDecoder(conn), //TODO: is there a way to limit the decoder's buffer size?
 		jid:        xmppcore.JID{Domain: srv.jid.Domain},
 	}
 	srv.clientsMutex.Lock()
@@ -214,8 +214,8 @@ mainloop:
 		case xml.EndElement:
 			endElem := token.(xml.EndElement)
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
-				if !cl.disconnecting {
-					cl.disconnecting = true
+				if !cl.closingStream {
+					cl.closingStream = true
 					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
 						Info("Client closed the stream. Disconnecting client....")
 					//TODO: should we send a reply or simply close the connection?
@@ -242,7 +242,7 @@ mainloop:
 			continue
 		}
 
-		if cl.disconnecting {
+		if cl.closingStream {
 			cl.xmlDecoder.Skip()
 			continue
 		}
@@ -254,9 +254,9 @@ mainloop:
 			if srv.handleClientStreamOpen(cl, &startElem) {
 				continue
 			}
-			cl.disconnecting = true
+			cl.closingStream = true
 			cl.conn.Write([]byte("</stream:stream>"))
-			//TODO: graceful close (wait until we got end stream from client)
+			//TODO: graceful disconnection (wait until the client close the stream)
 			break mainloop
 		case xmppcore.SASLAuthElementName:
 			srv.handleClientSASLAuth(cl, &startElem)
@@ -271,8 +271,9 @@ mainloop:
 			srv.handleClientMessage(cl, &startElem)
 			continue
 		default:
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 				Warn("unexpected XMPP stanza: ", startElem.Name)
+			cl.xmlDecoder.Skip()
 			continue
 		}
 	}
@@ -284,7 +285,7 @@ func (srv *Server) notifyClientSystemShutdown(cl *Client) {
 			logrus.Errorf("Got panic while sending system-shutdown notification: %#v", r)
 		}
 	}()
-	cl.disconnecting = true
+	cl.closingStream = true
 	cl.conn.Write([]byte(`<stream:error><system-shutdown xmlns='urn:ietf:params:xml:ns:xmpp-streams'/></stream:error>\n` +
 		`</stream:stream>`))
 }

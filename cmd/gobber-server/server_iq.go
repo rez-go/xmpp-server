@@ -68,6 +68,7 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 	default:
 		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
 			Warnf("Unrecognized IQ Set: %s", startElem.Name)
+		decoder.Skip()
 		errorXML, err := xml.Marshal(&xmppcore.StanzaError{
 			Type:      xmppcore.StanzaErrorTypeCancel,
 			Condition: xmppcore.StanzaErrorConditionFeatureNotImplemented,
@@ -251,6 +252,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 	default:
 		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
 			Warnf("Unrecognized IQ Get: %s", startElem.Name)
+		decoder.Skip()
 		errorXML, err := xml.Marshal(&xmppcore.StanzaError{
 			Type:      xmppcore.StanzaErrorTypeCancel,
 			Condition: xmppcore.StanzaErrorConditionFeatureNotImplemented,

@@ -2,6 +2,8 @@ package xmppim
 
 import (
 	"encoding/xml"
+
+	"sandbox/gobber/pkg/xmppcore"
 )
 
 //TODO: look at RFC 6121 Appendix D.
@@ -24,12 +26,24 @@ type RosterIQResult struct {
 	Item    []RosterItem `xml:"item,omitempty"`
 }
 
+const (
+	RosterItemAskSubscribe = "subscribe"
+)
+
+const (
+	RosterItemSubscriptionBoth   = "both"
+	RosterItemSubscriptionFrom   = "from"
+	RosterItemSubscriptionNone   = "none"
+	RosterItemSubscriptionRemove = "remove"
+	RosterItemSubscriptionTo     = "to"
+)
+
 type RosterItem struct {
-	XMLName      xml.Name `xml:"jabber:iq:roster item"`
-	Approved     string   `xml:"approved,attr,omitempty"` // *bool?
-	Ask          string   `xml:"ask,attr,omitempty"`      //TODO: what type?
-	JID          string   `xml:"jid,attr"`                //TODO: xmppcore.JID
-	Name         string   `xml:"name,attr,omitempty"`
-	Subscription string   `xml:"subscription,attr,omitempty"`
-	//TODO: Group
+	XMLName      xml.Name     `xml:"jabber:iq:roster item"`
+	Approved     *bool        `xml:"approved,attr,omitempty"`
+	Ask          string       `xml:"ask,attr,omitempty"`
+	JID          xmppcore.JID `xml:"jid,attr"`
+	Name         string       `xml:"name,attr,omitempty"`
+	Subscription string       `xml:"subscription,attr,omitempty"`
+	Group        string       `xml:"group,omitempty"`
 }

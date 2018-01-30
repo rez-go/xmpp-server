@@ -2,6 +2,8 @@ package xmppdisco
 
 import (
 	"encoding/xml"
+
+	"sandbox/gobber/pkg/xmppcore"
 )
 
 // XEP-0030: Service Discovery
@@ -67,7 +69,7 @@ type Feature struct {
 }
 
 type Item struct {
-	JID  string `xml:"jid,attr"` //TODO: xmppcore.JID
-	Name string `xml:"name,attr,omitempty"`
-	Node string `xml:"node,attr,omitempty"`
+	JID  xmppcore.JID `xml:"jid,attr"`
+	Name string       `xml:"name,attr,omitempty"`
+	Node string       `xml:"node,attr,omitempty"`
 }

@@ -36,17 +36,20 @@ type StreamError struct {
 	Text      string `xml:"text"`
 }
 
-// RFC 6120  4.9.3  Defined Stream Error Conditions
-
 // Per latest revision of RFC 6120, stream error conditions are empty elements.
 type StreamErrorCondition struct {
 	XMLName xml.Name // Deliberately un-tagged
 }
 
+// RFC 6120 section 4.9.3
 var (
-	StreamErrorConditionBadFormat           = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "bad-format"}}
-	StreamErrorConditionHostUnknown         = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "host-unknown"}}
-	StreamErrorConditionInternalServerError = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "internal-server-error"}}
-	StreamErrorConditionInvalidFrom         = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "invalid-from"}}
-	StreamErrorConditionNotAuthorized       = StreamErrorCondition{xml.Name{Space: StreamsNS, Local: "not-authorized"}}
+	StreamErrorConditionBadFormat           = streamErrorCondition("bad-format")
+	StreamErrorConditionHostUnknown         = streamErrorCondition("host-unknown")
+	StreamErrorConditionInternalServerError = streamErrorCondition("internal-server-error")
+	StreamErrorConditionInvalidFrom         = streamErrorCondition("invalid-from")
+	StreamErrorConditionNotAuthorized       = streamErrorCondition("not-authorized")
 )
+
+func streamErrorCondition(local string) StreamErrorCondition {
+	return StreamErrorCondition{xml.Name{Space: StreamsNS, Local: local}}
+}

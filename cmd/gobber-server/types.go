@@ -16,6 +16,6 @@ type Client struct {
 	disconnecting bool
 }
 
-type SASLPlainAuthHandler interface {
-	HandleSASLPlainAuth(username, password []byte) (bool, error)
+type SASLPlainAuthVerifier interface {
+	VerifySASLPlainAuth(username, password []byte) (bool, error)
 }

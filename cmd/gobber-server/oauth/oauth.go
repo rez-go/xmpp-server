@@ -12,7 +12,7 @@ type Authenticator struct {
 	ClientSecret  string
 }
 
-func (handler *Authenticator) HandleSASLPlainAuth(username, password []byte) (bool, error) {
+func (handler *Authenticator) VerifySASLPlainAuth(username, password []byte) (bool, error) {
 	client := &http.Client{}
 
 	reqData := url.Values{}

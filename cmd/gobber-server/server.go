@@ -31,7 +31,7 @@ type Server struct {
 	name string
 	jid  xmppcore.JID
 
-	saslPlainAuthHandler SASLPlainAuthHandler
+	saslPlainAuthVerifier SASLPlainAuthVerifier
 
 	startTime time.Time
 	stopCh    chan bool
@@ -52,17 +52,17 @@ func New(cfg *Config) (*Server, error) {
 		return nil, err
 	}
 	//TODO: configuration for this
-	saslPlainAuthHandler := &oauth.Authenticator{
+	saslPlainAuthVerifier := &oauth.Authenticator{
 		TokenEndpoint: "http://localhost:8080/oauth/token",
 	}
 	srv := &Server{
-		DoneCh:               make(chan bool),
-		name:                 cfg.Name,
-		jid:                  xmppcore.JID{Domain: cfg.Domain}, //TODO: normalize
-		saslPlainAuthHandler: saslPlainAuthHandler,
-		stopCh:               make(chan bool),
-		listener:             listener,
-		clients:              make(map[string]*Client),
+		DoneCh: make(chan bool),
+		name:   cfg.Name,
+		jid:    xmppcore.JID{Domain: cfg.Domain}, //TODO: normalize
+		saslPlainAuthVerifier: saslPlainAuthVerifier,
+		stopCh:                make(chan bool),
+		listener:              listener,
+		clients:               make(map[string]*Client),
 	}
 	return srv, nil
 }
@@ -339,7 +339,7 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 	} else {
 		//TODO: get features from the config and mods
 		var mechanisms []string
-		if srv.saslPlainAuthHandler != nil {
+		if srv.saslPlainAuthVerifier != nil {
 			mechanisms = append(mechanisms, "PLAIN")
 		}
 		featuresXML, err = xml.Marshal(&xmppcore.NegotiationStreamFeatures{

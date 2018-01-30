@@ -27,7 +27,7 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 	if len(authSegments) != 3 {
 		panic("there should be 3 parts here")
 	}
-	authOK, err := srv.saslPlainAuthHandler.HandleSASLPlainAuth(authSegments[1], authSegments[2])
+	authOK, err := srv.saslPlainAuthVerifier.VerifySASLPlainAuth(authSegments[1], authSegments[2])
 	if err != nil {
 		panic(err)
 	}

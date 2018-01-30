@@ -30,9 +30,14 @@ type StanzaErrorCondition struct {
 	XMLName xml.Name // Deliberately un-tagged
 }
 
+// RFC 6120 section 8.3.3
 var (
-	StanzaErrorConditionBadRequest            = StanzaErrorCondition{xml.Name{Space: StanzasNS, Local: "bad-request"}}
-	StanzaErrorConditionConflict              = StanzaErrorCondition{xml.Name{Space: StanzasNS, Local: "conflict"}}
-	StanzaErrorConditionFeatureNotImplemented = StanzaErrorCondition{xml.Name{Space: StanzasNS, Local: "feature-not-implemented"}}
-	StanzaErrorConditionServiceUnavailable    = StanzaErrorCondition{xml.Name{Space: StanzasNS, Local: "service-unavailable"}}
+	StanzaErrorConditionBadRequest            = stanzaErrorCondition("bad-request")
+	StanzaErrorConditionConflict              = stanzaErrorCondition("conflict")
+	StanzaErrorConditionFeatureNotImplemented = stanzaErrorCondition("feature-not-implemented")
+	StanzaErrorConditionServiceUnavailable    = stanzaErrorCondition("service-unavailable")
 )
+
+func stanzaErrorCondition(local string) StanzaErrorCondition {
+	return StanzaErrorCondition{xml.Name{Space: StanzasNS, Local: local}}
+}

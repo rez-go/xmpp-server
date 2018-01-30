@@ -47,7 +47,7 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 		srv.finishClientNegotiation(cl)
 	} else {
 		authRespXML, err := xml.Marshal(&xmppcore.SASLFailure{
-			Condition: xmppcore.StreamErrorConditionNotAuthorized,
+			Condition: xmppcore.SASLFailureConditionNotAuthorized,
 			Text:      "Invalid username or password",
 		})
 		if err != nil {

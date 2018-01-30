@@ -28,18 +28,19 @@ type AuthenticatedStreamFeatures struct {
 // RFC 6120  4.9  Stream Errors
 
 // RFC 6120  4.9.2
+//NOTE: the spec says that this element might contain
+// application-specific error condition.
 type StreamError struct {
-	XMLName         xml.Name `xml:"http://etherx.jabber.org/streams error"`
-	Condition       StreamErrorCondition
-	Text            string      `xml:"text"`
-	CustomCondition interface{} `xml:",omitempty"`
+	XMLName   xml.Name `xml:"http://etherx.jabber.org/streams error"`
+	Condition StreamErrorCondition
+	Text      string `xml:"text"`
 }
 
 // RFC 6120  4.9.3  Defined Stream Error Conditions
 
 // Per latest revision of RFC 6120, stream error conditions are empty elements.
 type StreamErrorCondition struct {
-	XMLName xml.Name
+	XMLName xml.Name // Deliberately un-tagged
 }
 
 var (

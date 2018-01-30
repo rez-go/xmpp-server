@@ -16,17 +16,18 @@ const (
 )
 
 // RFC 6120  8.3.2
+//NOTE: the spec says that this element might contain
+// application-specific error condition.
 type StanzaError struct {
-	XMLName         xml.Name `xml:"jabber:client error"`
-	By              string   `xml:"by,attr,omitempty"`
-	Type            string   `xml:"type,attr"`
-	Condition       StanzaErrorCondition
-	Text            string      `xml:"text,omitempty"`
-	CustomCondition interface{} `xml:",omitempty"`
+	XMLName   xml.Name `xml:"jabber:client error"`
+	By        string   `xml:"by,attr,omitempty"`
+	Type      string   `xml:"type,attr"`
+	Condition StanzaErrorCondition
+	Text      string `xml:"text,omitempty"`
 }
 
 type StanzaErrorCondition struct {
-	XMLName xml.Name
+	XMLName xml.Name // Deliberately un-tagged
 }
 
 var (

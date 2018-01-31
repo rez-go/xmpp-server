@@ -13,9 +13,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"sandbox/gobber/cmd/gobber-server/oauth"
-	"sandbox/gobber/pkg/xmppcore"
-	"sandbox/gobber/pkg/xmppim"
+	"github.com/exavolt/xmpp-server/cmd/xmpp-server/oauth"
+	"github.com/exavolt/xmpp-server/pkg/xmppcore"
+	"github.com/exavolt/xmpp-server/pkg/xmppim"
 )
 
 //NOTE: currently, we don't any plan for having support for serving

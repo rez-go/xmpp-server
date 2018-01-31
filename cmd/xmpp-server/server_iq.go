@@ -7,11 +7,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"sandbox/gobber/pkg/xmppcore"
-	"sandbox/gobber/pkg/xmppdisco"
-	"sandbox/gobber/pkg/xmppim"
-	"sandbox/gobber/pkg/xmppping"
-	"sandbox/gobber/pkg/xmppvcard"
+	"github.com/exavolt/xmpp-server/pkg/xmppcore"
+	"github.com/exavolt/xmpp-server/pkg/xmppdisco"
+	"github.com/exavolt/xmpp-server/pkg/xmppim"
+	"github.com/exavolt/xmpp-server/pkg/xmppping"
+	"github.com/exavolt/xmpp-server/pkg/xmppvcard"
 )
 
 func (srv *Server) handleClientIQ(cl *Client, startElem *xml.StartElement) {
@@ -287,7 +287,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		if iq.To != nil && iq.To.Equals(srv.jid) {
 			queryResultXML, err := xml.Marshal(xmppdisco.InfoIQResult{
 				Identity: []xmppdisco.Identity{
-					{Category: xmppdisco.IdentityCategoryServer, Type: "im", Name: "gobber"},
+					{Category: xmppdisco.IdentityCategoryServer, Type: "im", Name: "go-xmpp-server"},
 				},
 				Feature: []xmppdisco.Feature{
 					{Var: "iq"},

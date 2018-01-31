@@ -3,7 +3,7 @@ package xmppdisco
 import (
 	"encoding/xml"
 
-	"sandbox/gobber/pkg/xmppcore"
+	"github.com/exavolt/xmpp-server/pkg/xmppcore"
 )
 
 // XEP-0030: Service Discovery

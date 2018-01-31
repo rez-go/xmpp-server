@@ -4,7 +4,7 @@ import (
 	"encoding/xml"
 	"net"
 
-	"sandbox/gobber/pkg/xmppcore"
+	"github.com/exavolt/xmpp-server/pkg/xmppcore"
 )
 
 type Client struct {

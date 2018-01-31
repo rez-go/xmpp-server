@@ -3,7 +3,7 @@ package xmppim
 import (
 	"encoding/xml"
 
-	"sandbox/gobber/pkg/xmppcore"
+	"github.com/exavolt/xmpp-server/pkg/xmppcore"
 )
 
 //TODO: look at RFC 6121 Appendix D.

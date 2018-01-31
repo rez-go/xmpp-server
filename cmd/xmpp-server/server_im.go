@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"sandbox/gobber/pkg/xmppim"
+	"github.com/exavolt/xmpp-server/pkg/xmppim"
 )
 
 //TODO: move to xmppim

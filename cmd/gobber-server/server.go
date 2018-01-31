@@ -20,7 +20,7 @@ import (
 
 //NOTE: currently, we don't any plan for having support for serving
 // multiple domain as it increases the complexity of the code. we would
-// suggest to look at other solutions.
+// suggest to look at other / higher-level solutions.
 //NOTE: it seems that we don't need to acquire lock to net.Conn to
 // prevent multiple goroutines from messing up the network stream.
 // https://stackoverflow.com/questions/38565654/golang-net-conn-write-in-parallel

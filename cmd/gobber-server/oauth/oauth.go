@@ -6,6 +6,8 @@ import (
 	"net/url"
 )
 
+// Only the password_grant is currently implemented.
+
 type Authenticator struct {
 	TokenEndpoint string
 	ClientID      string

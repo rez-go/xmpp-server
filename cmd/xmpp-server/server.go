@@ -25,6 +25,13 @@ import (
 // prevent multiple goroutines from messing up the network stream.
 // https://stackoverflow.com/questions/38565654/golang-net-conn-write-in-parallel
 
+// Get from config
+const (
+	OAuthTokenEndpoint = "http://localhost:8080/oauth/token"
+	OAuthClientID      = ""
+	OAuthClientSecret  = ""
+)
+
 type Server struct {
 	DoneCh chan bool
 
@@ -51,9 +58,10 @@ func New(cfg *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	//TODO: configuration for this
 	saslPlainAuthVerifier := &oauth.Authenticator{
-		TokenEndpoint: "http://localhost:8080/oauth/token",
+		TokenEndpoint: OAuthTokenEndpoint,
+		ClientID:      OAuthClientID,
+		ClientSecret:  OAuthClientSecret,
 	}
 	srv := &Server{
 		DoneCh: make(chan bool),

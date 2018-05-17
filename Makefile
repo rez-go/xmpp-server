@@ -3,7 +3,10 @@ PKG_PATH = github.com/exavolt/xmpp-server
 DEP_IMAGE ?= exavolt/xmpp-server/dep
 GOLANG_IMAGE ?= golang:1.10
 
-.PHONY: fmt update-dependencies
+.PHONY: run fmt update-dependencies
+
+run:
+	docker-compose up --build
 
 fmt:
 	docker run --rm \

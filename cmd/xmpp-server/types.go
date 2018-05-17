@@ -4,7 +4,7 @@ import (
 	"encoding/xml"
 	"net"
 
-	"github.com/exavolt/xmpp-server/pkg/xmppcore"
+	"github.com/exavolt/go-xmpplib/xmppcore"
 )
 
 type Client struct {

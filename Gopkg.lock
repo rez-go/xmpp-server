@@ -8,6 +8,18 @@
   version = "v1.1.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/exavolt/go-xmpplib"
+  packages = [
+    "xmppcore",
+    "xmppdisco",
+    "xmppim",
+    "xmppping",
+    "xmppvcard"
+  ]
+  revision = "3230b27ca290a41d819e174fb9d32d221ccc9964"
+
+[[projects]]
   name = "github.com/google/uuid"
   packages = ["."]
   revision = "064e2069ce9c359c118179501254f67d7d37ba24"
@@ -55,6 +67,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "136261fe5d9722df18a3e7a24b8879866fbb294ddf1c4f9b6bea56825068c75c"
+  inputs-digest = "e5daa29d36c517e721ddb45a58ebb894a74ddd0d65a6b6f359337af679374593"
   solver-name = "gps-cdcl"
   solver-version = 1

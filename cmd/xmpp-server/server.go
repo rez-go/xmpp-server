@@ -94,7 +94,7 @@ mainloop:
 	}
 
 	// Stopping
-	logrus.Infof("Server is stopping after %s uptime...", srv.Uptime())
+	log.Infof("Server is stopping after %s uptime...", srv.Uptime())
 	srv.stopState = 1
 	srv.listener.Close()
 
@@ -106,7 +106,7 @@ mainloop:
 
 	srv.clientsWaitGroup.Wait()
 
-	logrus.Info("Server cleanly stopped")
+	log.Info("Server cleanly stopped")
 }
 
 func (srv *Server) Stop() {
@@ -126,7 +126,7 @@ func (srv *Server) listen() {
 		conn, err := srv.listener.Accept()
 		if err != nil {
 			if srv.stopState == 0 {
-				logrus.Error("Listener error: ", err)
+				log.Error("Listener error: ", err)
 			}
 			break
 		}
@@ -136,11 +136,11 @@ func (srv *Server) listen() {
 
 		cl, err := srv.newClient(conn)
 		if err != nil {
-			logrus.Error("Unable to create client: ", err)
+			log.Error("Unable to create client: ", err)
 			continue
 		}
 
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID}).Info("Client connected")
+		log.WithFields(logrus.Fields{"stream": cl.streamID}).Info("Client connected")
 		srv.clientsWaitGroup.Add(1)
 		go srv.serveClient(cl)
 	}
@@ -173,7 +173,7 @@ func (srv *Server) serveClient(cl *Client) {
 			cl.conn = nil
 		}
 
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Info("Client disconnected")
 
 		srv.clientsMutex.Lock()
@@ -189,7 +189,7 @@ mainloop:
 		if err != nil {
 			// Clean disconnection
 			if err == io.EOF {
-				logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+				log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 					Info("Client connection closed")
 				break mainloop
 			}
@@ -200,17 +200,17 @@ mainloop:
 			// streams and we will only close the 'inner' stream.
 			if xmlErr, _ := err.(*xml.SyntaxError); xmlErr != nil {
 				if xmlErr.Line == 1 && xmlErr.Msg == "unexpected EOF" {
-					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+					log.WithFields(logrus.Fields{"stream": cl.streamID}).
 						Info("Client connection closed without closing the stream")
 					break mainloop
 				}
 			}
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+			log.WithFields(logrus.Fields{"stream": cl.streamID}).
 				Errorf("Unexpected error: %#v", err)
 			break mainloop
 		}
 		if token == nil {
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+			log.WithFields(logrus.Fields{"stream": cl.streamID}).
 				Errorf("Token is nil")
 			break mainloop
 		}
@@ -224,7 +224,7 @@ mainloop:
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
 				if !cl.closingStream {
 					cl.closingStream = true
-					logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+					log.WithFields(logrus.Fields{"stream": cl.streamID}).
 						Info("Client closed the stream. Disconnecting client....")
 					//TODO: should we send a reply or simply close the connection?
 					cl.conn.Write([]byte("</stream:stream>"))
@@ -233,20 +233,20 @@ mainloop:
 				cl.conn.Close()
 				break mainloop
 			}
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+			log.WithFields(logrus.Fields{"stream": cl.streamID}).
 				Errorf("Unexpected EndElement: %#v", endElem)
 			panic(endElem)
 		case xml.ProcInst:
 			procInst := token.(xml.ProcInst)
 			if procInst.Target != "xml" {
-				logrus.WithFields(logrus.Fields{"stream": cl.streamID}).
+				log.WithFields(logrus.Fields{"stream": cl.streamID}).
 					Errorf("Unexpected processing instruction: %#v", procInst)
 				continue
 			}
 			// Check XML version, encoding?
 			continue
 		default:
-			logrus.Warnf("%#v", token)
+			log.Warnf("%#v", token)
 			continue
 		}
 
@@ -279,7 +279,7 @@ mainloop:
 			srv.handleClientMessage(cl, &startElem)
 			continue
 		default:
-			logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+			log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 				Warn("unexpected XMPP stanza: ", startElem.Name)
 			cl.xmlDecoder.Skip()
 			continue
@@ -290,7 +290,7 @@ mainloop:
 func (srv *Server) notifyClientSystemShutdown(cl *Client) {
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Got panic while sending system-shutdown notification: %#v", r)
+			log.Errorf("Got panic while sending system-shutdown notification: %#v", r)
 		}
 	}()
 	cl.closingStream = true

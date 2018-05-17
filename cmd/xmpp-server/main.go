@@ -9,6 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var log = logrus.New()
+
 func main() {
 	srv, err := New(&Config{
 		Name:   "test",
@@ -16,10 +18,10 @@ func main() {
 		Port:   "5222",
 	})
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
-	logrus.Info("Server start")
+	log.Info("Server start")
 	go srv.Serve()
 
 	signalCh := make(chan os.Signal)
@@ -33,20 +35,20 @@ mainloop:
 		select {
 		case sig := <-signalCh:
 			if forceStop {
-				logrus.Infof("Got signal %v. Forcing exit.", sig)
+				log.Infof("Got signal %v. Forcing exit.", sig)
 				break mainloop
 			}
-			logrus.Info("Got signal ", sig)
+			log.Info("Got signal ", sig)
 			srv.Stop()
 			forceStop = true
 			stopTimeout.Reset(10 * time.Second)
 		case <-stopTimeout.C:
-			logrus.Info("Shutdown timeout. Forcing exit.")
+			log.Info("Shutdown timeout. Forcing exit.")
 			break mainloop
 		case <-srv.DoneCh:
 			break mainloop
 		}
 	}
 
-	logrus.Info("Exit.")
+	log.Info("Exit.")
 }

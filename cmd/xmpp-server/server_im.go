@@ -61,7 +61,7 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 			}
 			msgXML, err := xml.Marshal(&outgoing)
 			if err != nil {
-				logrus.WithFields(logrus.Fields{"stream": rcl.streamID, "jid": rcl.jid, "stanza": incoming.ID}).
+				log.WithFields(logrus.Fields{"stream": rcl.streamID, "jid": rcl.jid, "stanza": incoming.ID}).
 					Warn("Unable to send a message into a recipient")
 				continue
 			}

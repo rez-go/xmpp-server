@@ -5,7 +5,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/exavolt/xmpp-server/pkg/xmppim"
+	"github.com/exavolt/go-xmpplib/xmppcore"
+	"github.com/exavolt/go-xmpplib/xmppim"
 )
 
 //TODO: move to xmppim
@@ -45,11 +46,18 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 	for _, rcl := range srv.clients {
 		if rcl.jid.Local == incoming.To.Local {
 			outgoing := xmppim.ClientMessage{
-				ID:      incoming.ID,
-				To:      &rcl.jid,
-				From:    cl.jid.BareCopyPtr(), //TODO: optional, bare or full (check the spec)
-				Type:    incoming.Type,
-				Payload: incoming.Payload,
+				ClientMessageAttributes: xmppim.ClientMessageAttributes{
+					StanzaCommonAttributes: xmppcore.StanzaCommonAttributes{
+						ID:   incoming.ID,
+						To:   &rcl.jid,
+						From: cl.jid.BareCopyPtr(), //TODO: optional, bare or full (check the spec)
+					},
+					Type: incoming.Type,
+				},
+				Error:   incoming.Error,
+				Body:    incoming.Body,
+				Subject: incoming.Subject,
+				Thread:  incoming.Thread,
 			}
 			msgXML, err := xml.Marshal(&outgoing)
 			if err != nil {

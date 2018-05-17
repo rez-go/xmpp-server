@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 
-	"github.com/exavolt/xmpp-server/pkg/xmppcore"
+	"github.com/exavolt/go-xmpplib/xmppcore"
 )
 
 func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement) {

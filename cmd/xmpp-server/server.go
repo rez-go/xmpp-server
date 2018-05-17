@@ -13,9 +13,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/exavolt/go-xmpplib/xmppcore"
+	"github.com/exavolt/go-xmpplib/xmppim"
 	"github.com/exavolt/xmpp-server/cmd/xmpp-server/oauth"
-	"github.com/exavolt/xmpp-server/pkg/xmppcore"
-	"github.com/exavolt/xmpp-server/pkg/xmppim"
 )
 
 //NOTE: currently, we don't any plan for having support for serving

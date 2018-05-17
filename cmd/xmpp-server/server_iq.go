@@ -7,11 +7,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/exavolt/xmpp-server/pkg/xmppcore"
-	"github.com/exavolt/xmpp-server/pkg/xmppdisco"
-	"github.com/exavolt/xmpp-server/pkg/xmppim"
-	"github.com/exavolt/xmpp-server/pkg/xmppping"
-	"github.com/exavolt/xmpp-server/pkg/xmppvcard"
+	"github.com/exavolt/go-xmpplib/xmppcore"
+	"github.com/exavolt/go-xmpplib/xmppdisco"
+	"github.com/exavolt/go-xmpplib/xmppim"
+	"github.com/exavolt/go-xmpplib/xmppping"
+	"github.com/exavolt/go-xmpplib/xmppvcard"
 )
 
 func (srv *Server) handleClientIQ(cl *Client, startElem *xml.StartElement) {

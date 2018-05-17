@@ -12,7 +12,7 @@ fmt:
 	docker run --rm \
 		-v $(CURDIR):/go \
 		--entrypoint gofmt \
-		$(GOLANG_IMAGE) -w -l -s ./cmd ./pkg
+		$(GOLANG_IMAGE) -w -l -s ./cmd
 
 update-dependencies:
 	docker build -t $(DEP_IMAGE) -f ./tools/dep.dockerfile .

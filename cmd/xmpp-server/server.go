@@ -367,8 +367,8 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 		" id='%s' xml:lang='en'"+
 		" xmlns:stream='%s' version='1.0'>\n"+
 		string(featuresXML)+"\n",
-		xmlEscape(srv.jid.FullString()), xmppcore.JabberClientNS,
-		xmlEscape(cl.streamID), xmppcore.JabberStreamsNS)
+		xmlEscapeString(srv.jid.FullString()), xmppcore.JabberClientNS,
+		xmlEscapeString(cl.streamID), xmppcore.JabberStreamsNS)
 	if err != nil {
 		panic(err)
 	}

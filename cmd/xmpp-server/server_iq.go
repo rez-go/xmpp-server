@@ -5,13 +5,13 @@ import (
 	"encoding/xml"
 	"io"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/exavolt/go-xmpplib/xmppcore"
 	"github.com/exavolt/go-xmpplib/xmppdisco"
 	"github.com/exavolt/go-xmpplib/xmppim"
 	"github.com/exavolt/go-xmpplib/xmppping"
 	"github.com/exavolt/go-xmpplib/xmppvcard"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 func (srv *Server) handleClientIQ(cl *Client, startElem *xml.StartElement) {
@@ -99,26 +99,35 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 
 	switch payload := element.(type) {
 	case *xmppcore.BindIQSet:
-		if cl.jid.Resource != "" && payload.Resource != cl.jid.Resource {
-			errorXML, err := xml.Marshal(xmppcore.StanzaError{
-				Type:      xmppcore.StanzaErrorTypeModify,
-				Condition: xmppcore.StanzaErrorConditionNotAcceptable,
-			})
-			if err != nil {
-				panic(err)
+		if payload.Resource == "" {
+			if cl.jid.Resource == "" {
+				cl.jid.Resource = uuid.New().String()
 			}
-			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
-				ID:      iq.ID,
-				Type:    xmppcore.IQTypeError,
-				From:    &srv.jid,
-				To:      &cl.jid,
-				Payload: errorXML,
-			})
-			if err != nil {
-				panic(err)
+		} else {
+			if cl.jid.Resource != "" {
+				if cl.jid.Resource != payload.Resource {
+					errorXML, err := xml.Marshal(xmppcore.StanzaError{
+						Type:      xmppcore.StanzaErrorTypeModify,
+						Condition: xmppcore.StanzaErrorConditionNotAcceptable,
+					})
+					if err != nil {
+						panic(err)
+					}
+					resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+						ID:      iq.ID,
+						Type:    xmppcore.IQTypeError,
+						From:    &srv.jid,
+						To:      &cl.jid,
+						Payload: errorXML,
+					})
+					if err != nil {
+						panic(err)
+					}
+					cl.conn.Write(resultXML)
+					return
+				}
 			}
-			cl.conn.Write(resultXML)
-			return
+			cl.jid.Resource = payload.Resource
 		}
 
 		cl.resourceBound = true

@@ -13,7 +13,7 @@ type SASLPlainAuthVerifier struct {
 func (handler *SASLPlainAuthVerifier) VerifySASLPlainAuth(
 	username, jwtBytes []byte,
 ) (localpart string, resource string, success bool, err error) {
-	//TODO: user JWT parser lib
+	//TODO: user JWT parser lib and actually verify the claims
 	jwtStr := string(jwtBytes)
 	jwtParts := strings.SplitN(jwtStr, ".", 3)
 	if len(jwtParts) != 3 {

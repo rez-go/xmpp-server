@@ -99,11 +99,26 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 
 	switch payload := element.(type) {
 	case *xmppcore.BindIQSet:
-		//TODO: if configured, override.
-		if payload.Resource != "" {
-			cl.jid.Resource = payload.Resource //TODO: normalize
-		} else {
-			cl.jid.Resource = cl.streamID
+		if cl.jid.Resource != "" && payload.Resource != cl.jid.Resource {
+			errorXML, err := xml.Marshal(xmppcore.StanzaError{
+				Type:      xmppcore.StanzaErrorTypeModify,
+				Condition: xmppcore.StanzaErrorConditionNotAcceptable,
+			})
+			if err != nil {
+				panic(err)
+			}
+			resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+				ID:      iq.ID,
+				Type:    xmppcore.IQTypeError,
+				From:    &srv.jid,
+				To:      &cl.jid,
+				Payload: errorXML,
+			})
+			if err != nil {
+				panic(err)
+			}
+			cl.conn.Write(resultXML)
+			return
 		}
 
 		cl.resourceBound = true
@@ -124,7 +139,6 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		if err != nil {
 			panic(err)
 		}
-
 		cl.conn.Write(resultXML)
 		return
 	case *xmppcore.SessionIQSet:

@@ -13,9 +13,14 @@ type Client struct {
 	xmlDecoder    *xml.Decoder
 	jid           xmppcore.JID
 	authenticated bool
+	resourceBound bool
 	closingStream bool
 }
 
+func (cl *Client) JID() xmppcore.JID {
+	return cl.jid
+}
+
 type SASLPlainAuthVerifier interface {
-	VerifySASLPlainAuth(username, password []byte) (bool, error)
+	VerifySASLPlainAuth(username, password []byte) (localpart string, resourcepart string, success bool, err error)
 }

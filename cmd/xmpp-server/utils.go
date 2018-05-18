@@ -5,7 +5,7 @@ import (
 	"encoding/xml"
 )
 
-func xmlEscape(s string) string {
+func xmlEscapeString(s string) string {
 	var b bytes.Buffer
 	xml.Escape(&b, []byte(s))
 	return b.String()

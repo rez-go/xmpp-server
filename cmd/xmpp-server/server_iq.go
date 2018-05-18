@@ -5,13 +5,13 @@ import (
 	"encoding/xml"
 	"io"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/exavolt/go-xmpplib/xmppcore"
 	"github.com/exavolt/go-xmpplib/xmppdisco"
 	"github.com/exavolt/go-xmpplib/xmppim"
 	"github.com/exavolt/go-xmpplib/xmppping"
 	"github.com/exavolt/go-xmpplib/xmppvcard"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 func (srv *Server) handleClientIQ(cl *Client, startElem *xml.StartElement) {
@@ -45,7 +45,7 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		return
 	}
 	if err != nil {
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Errorf("Unexpected error: %#v", err)
 		return
 	}
@@ -68,7 +68,7 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 	case xmppvcard.ElementName:
 		element = &xmppvcard.IQSet{}
 	default:
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
 			Warnf("Unrecognized IQ Set: %s", startElem.Name)
 		decoder.Skip()
 		errorXML, err := xml.Marshal(&xmppcore.StanzaError{
@@ -99,13 +99,39 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 
 	switch payload := element.(type) {
 	case *xmppcore.BindIQSet:
-		//TODO: if configured, override.
-		if payload.Resource != "" {
-			cl.jid.Resource = payload.Resource //TODO: normalize
+		if payload.Resource == "" {
+			if cl.jid.Resource == "" {
+				cl.jid.Resource = uuid.New().String()
+			}
 		} else {
-			cl.jid.Resource = cl.streamID
+			if cl.jid.Resource != "" {
+				if cl.jid.Resource != payload.Resource {
+					errorXML, err := xml.Marshal(xmppcore.StanzaError{
+						Type:      xmppcore.StanzaErrorTypeModify,
+						Condition: xmppcore.StanzaErrorConditionNotAcceptable,
+					})
+					if err != nil {
+						panic(err)
+					}
+					resultXML, err := xml.Marshal(xmppcore.ClientIQ{
+						ID:      iq.ID,
+						Type:    xmppcore.IQTypeError,
+						From:    &srv.jid,
+						To:      &cl.jid,
+						Payload: errorXML,
+					})
+					if err != nil {
+						panic(err)
+					}
+					cl.conn.Write(resultXML)
+					return
+				}
+			}
+			cl.jid.Resource = payload.Resource
 		}
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+
+		cl.resourceBound = true
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Info("Bound!")
 
 		resultPayloadXML, err := xml.Marshal(&xmppcore.BindIQResult{
@@ -122,7 +148,6 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		if err != nil {
 			panic(err)
 		}
-
 		cl.conn.Write(resultXML)
 		return
 	case *xmppcore.SessionIQSet:
@@ -186,7 +211,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 		return
 	}
 	if err != nil {
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Errorf("Unexpected error: %#v", err)
 		return
 	}
@@ -200,7 +225,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 
 	// RFC 6120  4.9.3.9
 	if iq.From != nil && !iq.From.Equals(cl.jid) {
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
 			Warnf("Invalid from: %s", iq.From)
 		errorXML, err := xml.Marshal(xmppcore.StreamError{
 			Condition: xmppcore.StreamErrorConditionInvalidFrom,
@@ -214,7 +239,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 	}
 	//TODO: check RFC 6120 8.1.1.1.
 	if iq.To != nil && iq.To.Domain != srv.jid.Domain {
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
 			Warnf("Invalid to: %s", iq.To)
 		errorXML, err := xml.Marshal(xmppcore.StanzaError{
 			Type:      xmppcore.StanzaErrorTypeCancel,
@@ -252,7 +277,7 @@ func (srv *Server) handleClientIQGet(cl *Client, iq *xmppcore.ClientIQ) {
 	case xmppping.ElementName:
 		element = &xmppping.IQGet{}
 	default:
-		logrus.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid, "stanza": iq.ID}).
 			Warnf("Unrecognized IQ Get: %s", startElem.Name)
 		decoder.Skip()
 		errorXML, err := xml.Marshal(&xmppcore.StanzaError{

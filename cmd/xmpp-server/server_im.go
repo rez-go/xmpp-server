@@ -43,14 +43,21 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 	srv.clientsMutex.RLock()
 	defer srv.clientsMutex.RUnlock()
 
-	for _, rcl := range srv.clients {
-		if rcl.jid.Local == incoming.To.Local {
+	recipientResources := srv.authenticatedClients[incoming.To.Local]
+	if len(recipientResources) == 0 {
+		return
+	}
+
+	fromJID := cl.jid.BareCopyPtr() //TODO: optional, bare or full (check the spec)
+
+	if incoming.To.Resource == "" {
+		for _, rcl := range recipientResources {
 			outgoing := xmppim.ClientMessage{
 				ClientMessageAttributes: xmppim.ClientMessageAttributes{
 					StanzaCommonAttributes: xmppcore.StanzaCommonAttributes{
 						ID:   incoming.ID,
 						To:   &rcl.jid,
-						From: cl.jid.BareCopyPtr(), //TODO: optional, bare or full (check the spec)
+						From: fromJID,
 					},
 					Type: incoming.Type,
 				},
@@ -61,11 +68,37 @@ func (srv *Server) handleClientMessage(cl *Client, startElem *xml.StartElement) 
 			}
 			msgXML, err := xml.Marshal(&outgoing)
 			if err != nil {
-				logrus.WithFields(logrus.Fields{"stream": rcl.streamID, "jid": rcl.jid, "stanza": incoming.ID}).
+				log.WithFields(logrus.Fields{"stream": rcl.streamID, "jid": rcl.jid, "stanza": incoming.ID}).
 					Warn("Unable to send a message into a recipient")
 				continue
 			}
 			rcl.conn.Write(msgXML)
 		}
+	} else {
+		rcl := recipientResources[incoming.To.Resource]
+		if rcl == nil {
+			return
+		}
+		outgoing := xmppim.ClientMessage{
+			ClientMessageAttributes: xmppim.ClientMessageAttributes{
+				StanzaCommonAttributes: xmppcore.StanzaCommonAttributes{
+					ID:   incoming.ID,
+					To:   &rcl.jid,
+					From: fromJID,
+				},
+				Type: incoming.Type,
+			},
+			Error:   incoming.Error,
+			Body:    incoming.Body,
+			Subject: incoming.Subject,
+			Thread:  incoming.Thread,
+		}
+		msgXML, err := xml.Marshal(&outgoing)
+		if err != nil {
+			log.WithFields(logrus.Fields{"stream": rcl.streamID, "jid": rcl.jid, "stanza": incoming.ID}).
+				Warn("Unable to send a message into a recipient")
+			return
+		}
+		rcl.conn.Write(msgXML)
 	}
 }

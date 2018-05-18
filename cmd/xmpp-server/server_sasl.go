@@ -27,9 +27,32 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 	if len(authSegments) != 3 {
 		panic("there should be 3 parts here")
 	}
-	authOK, err := srv.saslPlainAuthVerifier.VerifySASLPlainAuth(authSegments[1], authSegments[2])
+	var assumedLocal string
+	// if len(authSegments[0]) > 0 {
+	// 	// If the first segment is provided, we'll have an assumed session
+	// 	//TODO: check format, check user existence, check privilege, normalize
+	// 	var assumedJID xmppcore.JID
+	// 	assumedJID, err = xmppcore.ParseJID(string(authSegments[0]))
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	if assumedJID.Local == "" {
+	// 		panic("Assume not a JID?")
+	// 	}
+	// 	if assumedJID.Domain != srv.jid.Domain {
+	// 		panic("TODO: handle this")
+	// 	}
+	// 	assumedLocal = assumedJID.Local
+	// }
+	localpart, resourcepart, authOK, err := srv.saslPlainAuthVerifier.VerifySASLPlainAuth(
+		authSegments[1], authSegments[2])
 	if err != nil {
 		panic(err)
+	}
+	if assumedLocal != "" {
+		localpart = assumedLocal
+	} else if localpart == "" {
+		localpart = string(authSegments[1]) //TODO: normalize
 	}
 	if authOK {
 		authRespXML, err := xml.Marshal(&xmppcore.SASLSuccess{})
@@ -38,12 +61,8 @@ func (srv *Server) handleClientSASLAuth(cl *Client, startElem *xml.StartElement)
 		}
 		cl.conn.Write(authRespXML)
 		cl.authenticated = true
-		cl.jid.Local = string(authSegments[1]) //TODO: normalize
-		if len(authSegments[0]) > 0 {
-			// If the first segment is provided, we'll have an assumed session
-			//TODO: check format, check user existence, check privilege, normalize
-			//cl.jid.Local = string(authSegments[0])
-		}
+		cl.jid.Local = localpart
+		cl.jid.Resource = resourcepart
 		srv.finishClientNegotiation(cl)
 	} else {
 		authRespXML, err := xml.Marshal(&xmppcore.SASLFailure{

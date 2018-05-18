@@ -9,34 +9,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/exavolt/go-xmpplib/xmppcore"
+	"github.com/exavolt/go-xmpplib/xmppim"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/exavolt/go-xmpplib/xmppcore"
-	"github.com/exavolt/go-xmpplib/xmppim"
-	"github.com/exavolt/xmpp-server/cmd/xmpp-server/oauth"
+	"github.com/exavolt/xmpp-server/cmd/xmpp-server/jwt"
 )
 
-//NOTE: currently, we don't any plan for having support for serving
-// multiple domain as it increases the complexity of the code. we would
-// suggest to look at other / higher-level solutions.
 //NOTE: it seems that we don't need to acquire lock to net.Conn to
 // prevent multiple goroutines from messing up the network stream.
 // https://stackoverflow.com/questions/38565654/golang-net-conn-write-in-parallel
 
-// Get from config
-const (
-	OAuthTokenEndpoint = "http://localhost:8080/oauth/token"
-	OAuthClientID      = ""
-	OAuthClientSecret  = ""
-)
-
 type Server struct {
 	DoneCh chan bool
 
-	name string
-	jid  xmppcore.JID
+	name         string
+	jid          xmppcore.JID
+	groupsDomain string
 
 	saslPlainAuthVerifier SASLPlainAuthVerifier
 
@@ -44,36 +35,53 @@ type Server struct {
 	stopCh    chan bool
 	stopState int
 
-	listener         net.Listener
-	clients          map[string]*Client
-	clientsMutex     sync.RWMutex
-	clientsWaitGroup sync.WaitGroup
+	netListener          net.Listener
+	negotiatingClients   map[string]*Client            // key is streamid
+	authenticatedClients map[string]map[string]*Client // key is local:resource
+	clientsMutex         sync.RWMutex
+	clientsWaitGroup     sync.WaitGroup
+
+	//userClientMessageHandler  UserClientMessageHandler
+	//groupClientMessageHandler GroupClientMessageHandler
 }
 
-func New(cfg *Config) (*Server, error) {
+func New(
+	cfg *Config,
+) (*Server, error) {
 	if cfg == nil {
 		return nil, nil
 	}
-	listener, err := net.Listen("tcp", ":"+cfg.Port)
+	netListener, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {
 		return nil, err
 	}
-	saslPlainAuthVerifier := &oauth.Authenticator{
-		TokenEndpoint: OAuthTokenEndpoint,
-		ClientID:      OAuthClientID,
-		ClientSecret:  OAuthClientSecret,
-	}
+	saslPlainAuthVerifier := &jwt.SASLPlainAuthVerifier{}
 	srv := &Server{
-		DoneCh: make(chan bool),
-		name:   cfg.Name,
-		jid:    xmppcore.JID{Domain: cfg.Domain}, //TODO: normalize
+		DoneCh:                make(chan bool),
+		name:                  cfg.Name,
+		jid:                   xmppcore.JID{Domain: cfg.Domain}, //TODO: normalize
+		groupsDomain:          "groups." + cfg.Domain,
 		saslPlainAuthVerifier: saslPlainAuthVerifier,
 		stopCh:                make(chan bool),
-		listener:              listener,
-		clients:               make(map[string]*Client),
+		netListener:           netListener,
+		negotiatingClients:    make(map[string]*Client),
+		authenticatedClients:  make(map[string]map[string]*Client),
 	}
 	return srv, nil
 }
+
+// func (srv *Server) WithUserClientMessageHandler(userClientMessageHandler UserClientMessageHandler) *Server {
+// 	srv.userClientMessageHandler = userClientMessageHandler // mutex-lock?
+// 	return srv
+// }
+
+// func (srv *Server) WithGroupClientMessageHandler(groupClientMessageHandler GroupClientMessageHandler) *Server {
+// 	srv.groupClientMessageHandler = groupClientMessageHandler // mutex-lock?
+// 	return srv
+// }
+
+func (srv *Server) Domain() string       { return srv.jid.Domain }
+func (srv *Server) GroupsDomain() string { return srv.groupsDomain }
 
 func (srv *Server) Serve() {
 	defer func() {
@@ -83,6 +91,7 @@ func (srv *Server) Serve() {
 
 	srv.startTime = time.Now()
 	go srv.listen()
+	log.Infof("Ready to accept connections")
 
 mainloop:
 	for {
@@ -94,19 +103,24 @@ mainloop:
 	}
 
 	// Stopping
-	log.Infof("Server is stopping after %s uptime...", srv.Uptime())
+	log.Infof("Stopping after %s uptime...", srv.Uptime())
 	srv.stopState = 1
-	srv.listener.Close()
+	srv.netListener.Close()
 
 	srv.clientsMutex.RLock()
-	for _, cl := range srv.clients {
+	for _, cl := range srv.negotiatingClients {
 		srv.notifyClientSystemShutdown(cl)
+	}
+	for _, ucl := range srv.authenticatedClients {
+		for _, cl := range ucl {
+			srv.notifyClientSystemShutdown(cl)
+		}
 	}
 	srv.clientsMutex.RUnlock()
 
 	srv.clientsWaitGroup.Wait()
 
-	log.Info("Server cleanly stopped")
+	log.Info("Cleanly stopped")
 }
 
 func (srv *Server) Stop() {
@@ -123,7 +137,7 @@ func (srv *Server) Uptime() time.Duration {
 
 func (srv *Server) listen() {
 	for srv.stopState == 0 {
-		conn, err := srv.listener.Accept()
+		conn, err := srv.netListener.Accept()
 		if err != nil {
 			if srv.stopState == 0 {
 				log.Error("Listener error: ", err)
@@ -150,18 +164,18 @@ func (srv *Server) newClient(conn net.Conn) (*Client, error) {
 	if conn == nil {
 		return nil, nil
 	}
-	sid, err := srv.generateSessionID()
+	streamID, err := srv.generateStreamID()
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to generate session id")
 	}
 	cl := &Client{
 		conn:       conn,
-		streamID:   sid,
+		streamID:   streamID,
 		xmlDecoder: xml.NewDecoder(conn), //TODO: is there a way to limit the decoder's buffer size?
 		jid:        xmppcore.JID{Domain: srv.jid.Domain},
 	}
 	srv.clientsMutex.Lock()
-	srv.clients[cl.streamID] = cl
+	srv.negotiatingClients[cl.streamID] = cl
 	srv.clientsMutex.Unlock()
 	return cl, nil
 }
@@ -169,15 +183,24 @@ func (srv *Server) newClient(conn net.Conn) (*Client, error) {
 func (srv *Server) serveClient(cl *Client) {
 	defer func() {
 		if cl.conn != nil {
+			log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+				Info("Closing client connection")
 			cl.conn.Close()
 			cl.conn = nil
+		} else {
+			log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+				Info("Client disconnected")
 		}
 
-		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
-			Info("Client disconnected")
-
 		srv.clientsMutex.Lock()
-		delete(srv.clients, cl.streamID)
+		if cl.authenticated {
+			userClients := srv.authenticatedClients[cl.jid.Local]
+			if userClients != nil {
+				delete(userClients, cl.jid.Resource)
+			}
+		} else {
+			delete(srv.negotiatingClients, cl.streamID)
+		}
 		srv.clientsMutex.Unlock()
 
 		srv.clientsWaitGroup.Done()
@@ -200,7 +223,7 @@ mainloop:
 			// streams and we will only close the 'inner' stream.
 			if xmlErr, _ := err.(*xml.SyntaxError); xmlErr != nil {
 				if xmlErr.Line == 1 && xmlErr.Msg == "unexpected EOF" {
-					log.WithFields(logrus.Fields{"stream": cl.streamID}).
+					log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 						Info("Client connection closed without closing the stream")
 					break mainloop
 				}
@@ -224,7 +247,7 @@ mainloop:
 			if endElem.Name.Space == xmppcore.JabberStreamsNS && endElem.Name.Local == "stream" {
 				if !cl.closingStream {
 					cl.closingStream = true
-					log.WithFields(logrus.Fields{"stream": cl.streamID}).
+					log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 						Info("Client closed the stream. Disconnecting client....")
 					//TODO: should we send a reply or simply close the connection?
 					cl.conn.Write([]byte("</stream:stream>"))
@@ -233,13 +256,13 @@ mainloop:
 				cl.conn.Close()
 				break mainloop
 			}
-			log.WithFields(logrus.Fields{"stream": cl.streamID}).
+			log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 				Errorf("Unexpected EndElement: %#v", endElem)
 			panic(endElem)
 		case xml.ProcInst:
 			procInst := token.(xml.ProcInst)
 			if procInst.Target != "xml" {
-				log.WithFields(logrus.Fields{"stream": cl.streamID}).
+				log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 					Errorf("Unexpected processing instruction: %#v", procInst)
 				continue
 			}
@@ -267,30 +290,38 @@ mainloop:
 			//TODO: graceful disconnection (wait until the client close the stream)
 			break mainloop
 		case xmppcore.SASLAuthElementName:
-			srv.handleClientSASLAuth(cl, &startElem)
-			continue
+			if !cl.authenticated {
+				srv.handleClientSASLAuth(cl, &startElem)
+				continue
+			}
 		case xmppcore.ClientIQElementName:
-			srv.handleClientIQ(cl, &startElem)
-			continue
+			if cl.authenticated {
+				srv.handleClientIQ(cl, &startElem)
+				continue
+			}
 		case xmppim.ClientPresenceElementName:
-			srv.handleClientPresence(cl, &startElem)
-			continue
+			if cl.authenticated {
+				srv.handleClientPresence(cl, &startElem)
+				continue
+			}
 		case xmppim.ClientMessageElementName:
-			srv.handleClientMessage(cl, &startElem)
-			continue
-		default:
-			log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
-				Warn("unexpected XMPP stanza: ", startElem.Name)
-			cl.xmlDecoder.Skip()
-			continue
+			if cl.authenticated {
+				srv.handleClientMessage(cl, &startElem)
+				continue
+			}
 		}
+		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+			Warn("Unexpected XMPP stanza: ", startElem.Name)
+		cl.xmlDecoder.Skip()
+		continue
 	}
 }
 
 func (srv *Server) notifyClientSystemShutdown(cl *Client) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Got panic while sending system-shutdown notification: %#v", r)
+			log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+				Errorf("Got panic while sending system-shutdown notification: %#v", r)
 		}
 	}()
 	cl.closingStream = true
@@ -377,22 +408,31 @@ func (srv *Server) handleClientStreamOpen(cl *Client, startElem *xml.StartElemen
 }
 
 func (srv *Server) finishClientNegotiation(cl *Client) {
-	sid, err := srv.generateSessionID()
+	if cl.jid.Local == "" || cl.jid.Resource == "" {
+		panic("unexpected condition")
+	}
+	newStreamID, err := srv.generateStreamID()
 	if err != nil {
 		panic(err)
 	}
 	srv.clientsMutex.Lock()
-	delete(srv.clients, cl.streamID)
-	cl.streamID = sid
-	srv.clients[cl.streamID] = cl
+	delete(srv.negotiatingClients, cl.streamID)
+	oldStreamID := cl.streamID
+	cl.streamID = newStreamID
+	if srv.authenticatedClients[cl.jid.Local] == nil {
+		srv.authenticatedClients[cl.jid.Local] = make(map[string]*Client)
+	}
+	srv.authenticatedClients[cl.jid.Local][cl.jid.Resource] = cl
 	srv.clientsMutex.Unlock()
+	log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
+		Infof("Negotiation completed: %s => %s", oldStreamID, cl.streamID)
 }
 
-func (srv *Server) generateSessionID() (string, error) {
-	sid, err := uuid.NewRandom()
+func (srv *Server) generateStreamID() (string, error) {
+	idRaw, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
-	sidEncd := base64.RawURLEncoding.EncodeToString(sid[:])
-	return string(sidEncd), nil
+	idEncd := base64.RawURLEncoding.EncodeToString(idRaw[:])
+	return string(idEncd), nil
 }

@@ -105,6 +105,8 @@ func (srv *Server) handleClientIQSet(cl *Client, iq *xmppcore.ClientIQ) {
 		} else {
 			cl.jid.Resource = cl.streamID
 		}
+
+		cl.resourceBound = true
 		log.WithFields(logrus.Fields{"stream": cl.streamID, "jid": cl.jid}).
 			Info("Bound!")
 

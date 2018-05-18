@@ -54,7 +54,7 @@ func New(cfg *Config) (*Server, error) {
 	if cfg == nil {
 		return nil, nil
 	}
-	listener, err := net.Listen("tcp", "localhost:"+cfg.Port)
+	listener, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {
 		return nil, err
 	}

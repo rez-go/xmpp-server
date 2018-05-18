@@ -22,5 +22,5 @@ func (cl *Client) JID() xmppcore.JID {
 }
 
 type SASLPlainAuthVerifier interface {
-	VerifySASLPlainAuth(username, password []byte) (bool, error)
+	VerifySASLPlainAuth(username, password []byte) (localpart string, resourcepart string, success bool, err error)
 }

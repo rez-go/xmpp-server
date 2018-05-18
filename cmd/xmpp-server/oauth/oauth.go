@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/url"
 )
@@ -14,7 +15,9 @@ type Authenticator struct {
 	ClientSecret  string
 }
 
-func (handler *Authenticator) VerifySASLPlainAuth(username, password []byte) (bool, error) {
+func (handler *Authenticator) VerifySASLPlainAuth(
+	username, password []byte,
+) (localpart string, resource string, success bool, err error) {
 	client := &http.Client{}
 
 	reqData := url.Values{}
@@ -29,12 +32,18 @@ func (handler *Authenticator) VerifySASLPlainAuth(username, password []byte) (bo
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return false, err
+		return "", "", false, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		return true, nil
+	if resp.StatusCode >= 500 {
+		return "", "", false, errors.New("authentication gateway error")
 	}
-	return false, nil
+	if resp.StatusCode >= 400 {
+		return "", "", false, errors.New("authentication module error")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", "", false, nil
+	}
+	return string(username), "", true, nil
 }
